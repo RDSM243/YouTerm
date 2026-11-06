@@ -33,4 +33,4 @@ Versões para **Windows e macOS** estão nos planos para o futuro.
 
 Ideias, temas, sugestões e contribuições são bem-vindos. Conte o que você gostaria de ver no player nas [issues](https://github.com/RDSM243/YouTerm/issues) ou envie uma contribuição.
 
-O YouTerm é distribuído sob a [licença MIT](./LICENSE).
+O YouTerm é distribuído sob a [licença GNU GPLv3](./LICENSE).

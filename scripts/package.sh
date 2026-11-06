@@ -29,6 +29,8 @@ mkdir -p "$STAGE" "$RELEASES"
 mkdir -p "$STAGE/usr/bin" \
          "$STAGE/usr/lib/youterm" \
          "$STAGE/usr/share/applications" \
+         "$STAGE/usr/share/licenses/youterm" \
+         "$STAGE/usr/share/doc/youterm" \
          "$STAGE/usr/share/icons/hicolor/scalable/apps" \
          "$STAGE/usr/share/icons/hicolor/256x256/apps"
 
@@ -36,6 +38,12 @@ cp "$BIN" "$STAGE/usr/lib/youterm/youterm"
 chmod 0755 "$STAGE/usr/lib/youterm/youterm"
 cp -r dist "$STAGE/usr/lib/youterm/dist"
 cp .env.example "$STAGE/usr/lib/youterm/config.example.env"
+cp LICENSE COPYRIGHT "$STAGE/usr/share/licenses/youterm/"
+cat > "$STAGE/usr/share/doc/youterm/SOURCE.txt" << EOF
+YouTerm ${VERSION} — corresponding source code and build scripts:
+https://github.com/RDSM243/YouTerm/tree/v${VERSION}
+https://github.com/RDSM243/YouTerm/archive/refs/tags/v${VERSION}.tar.gz
+EOF
 
 cat > "$STAGE/usr/bin/youterm" << 'EOF'
 #!/bin/sh

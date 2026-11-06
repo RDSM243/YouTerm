@@ -3,6 +3,7 @@ name = "youterm"
 version = "0.2.0"
 description = "YouTerm - High-performance YouTube Music desktop player (Tauri v2 + Rust)"
 authors = ["YouTerm"]
+license = "GPL-3.0-only"
 edition = "2021"
 
 [build-dependencies]
