@@ -371,8 +371,19 @@ export class YouTubeAudioEngine {
   }
 
   public toggleFormat() {
-    if (!this.currentVideoId) return;
-    const nextFormat: AudioFormat = this.currentFormat === 'm4a' ? 'webm' : 'm4a';
+    this.setFormat(this.currentFormat === 'm4a' ? 'webm' : 'm4a');
+  }
+
+  public setFormat(nextFormat: AudioFormat) {
+    if (this.isChangingFormat) return;
+    this.preferredFormat = nextFormat;
+    if (this.currentFormat === nextFormat) return;
+    for (const videoId of this.preparedAudio.keys()) this.discardPrepared(videoId);
+    if (!this.currentVideoId) {
+      this.currentFormat = nextFormat;
+      this.onFormatChangeCallback?.(nextFormat, false);
+      return;
+    }
     this.attemptedFormats.clear();
     this.isChangingFormat = true;
     this.onFormatChangeCallback?.(nextFormat, true);

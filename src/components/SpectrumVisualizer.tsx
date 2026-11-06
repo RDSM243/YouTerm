@@ -37,7 +37,7 @@ const DB_MARKERS = [
   { db: -48, label: '-48dB' },
 ];
 
-const GAIN_PRESETS = [0, 0.5, 0.8, 1.0, 1.3, 1.6]; // 0 = AUTO (CAVA AGC)
+const GAIN_PRESETS = [0, 0.5, 0.8, 1.0, 1.3, 1.6]; // 0 = automatic gain
 
 function freqToNote(freq: number): string {
   if (freq < 20 || freq > 20000 || !Number.isFinite(freq)) return '--';
@@ -55,10 +55,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
   currentTrack,
   maxFrameRate = 60,
 }) => {
-  const [mode, setMode] = useState<VisualizerMode>(() => {
-    const saved = loadPlayerPreferences().spectrumMode;
-    return saved === 'bars' || saved === 'wave' || saved === 'matrix' ? saved : 'bars';
-  });
+  const [mode, setMode] = useState<VisualizerMode>(() => loadPlayerPreferences().spectrumMode);
   const [fps, setFps] = useState<number>(60);
   const [rmsDb, setRmsDb] = useState<number>(-96);
   const [peakDb, setPeakDb] = useState<number>(-96);
@@ -664,18 +661,18 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
         </div>
 
         {/* Action Controls & Modes */}
-        <div className="flex items-center gap-1.5 text-[11px]">
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
           {/* Sensitivity Adjuster */}
           <button
+            type="button"
             onClick={() => {
-              const currentIdx = GAIN_PRESETS.findIndex((p) => Math.abs(p - sensitivity) < 0.05);
-              const nextIdx = (currentIdx + 1) % GAIN_PRESETS.length;
-              const nextSens = GAIN_PRESETS[nextIdx];
-              setSensitivity(nextSens);
-              savePlayerPreferences({ spectrumSensitivity: nextSens });
+              const currentIndex = GAIN_PRESETS.findIndex(value => Math.abs(value - sensitivity) < 0.05);
+              const nextSensitivity = GAIN_PRESETS[(currentIndex + 1) % GAIN_PRESETS.length];
+              setSensitivity(nextSensitivity);
+              savePlayerPreferences({ spectrumSensitivity: nextSensitivity });
             }}
+            title="Adjust visualizer gain / automatic sensitivity"
             className="px-2 py-0.5 border hover:brightness-125 transition-all text-[10px]"
-            title="Adjust Visualizer Gain / Auto-Sensitivity (CAVA AGC)"
             style={{
               borderColor: sensitivity === 0 ? theme.accent : theme.border,
               color: sensitivity === 0 ? theme.highlight : theme.textDim,
@@ -685,25 +682,17 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
             Gain: {sensitivity === 0 ? `AUTO (${liveAutoGain.toFixed(1)}x)` : `${sensitivity.toFixed(1)}x`}
           </button>
 
-          {/* Visualization Modes */}
-          {(['bars', 'wave', 'matrix'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => {
-                setMode(m);
-                savePlayerPreferences({ spectrumMode: m });
-              }}
+          {(['bars', 'wave', 'matrix'] as const).map(value => (
+            <button key={value} type="button" aria-pressed={mode === value}
+              onClick={() => { setMode(value); savePlayerPreferences({ spectrumMode: value }); }}
               className="px-2.5 py-0.5 border uppercase font-bold hover:brightness-125 transition-all flex items-center gap-1"
-              style={{
-                borderColor: mode === m ? theme.accent : theme.border,
-                color: mode === m ? theme.highlight : theme.textDim,
-                backgroundColor: mode === m ? 'rgba(255,255,255,0.08)' : theme.bg,
-              }}
-            >
-              {m === 'bars' && <BarChart2 className="w-3 h-3" />}
-              {m === 'wave' && <Waves className="w-3 h-3" />}
-              {m === 'matrix' && <Cpu className="w-3 h-3" />}
-              <span>[{m}]</span>
+              style={{ borderColor: mode === value ? theme.accent : theme.border,
+                color: mode === value ? theme.highlight : theme.textDim,
+                backgroundColor: mode === value ? 'rgba(255,255,255,0.08)' : theme.bg }}>
+              {value === 'bars' && <BarChart2 className="w-3 h-3" />}
+              {value === 'wave' && <Waves className="w-3 h-3" />}
+              {value === 'matrix' && <Cpu className="w-3 h-3" />}
+              <span>[{value}]</span>
             </button>
           ))}
         </div>

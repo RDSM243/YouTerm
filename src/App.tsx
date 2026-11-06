@@ -1,23 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { version as appVersion } from '../package.json';
 import {
   Album,
   AppearanceConfig,
   AsciiConfig,
-  AsciiRenderMode,
   AsciiResult,
   LibraryCategory,
   PlayerState,
   Playlist,
+  SidebarPreferences,
   ThemeConfig,
   ThemeId,
   Track,
   TuiViewMode,
   UserSession,
 } from './types';
-import { THEMES } from './data/themes';
+import { DEFAULT_THEME_ID, THEMES } from './data/themes';
 import { FONT_OPTIONS, getFontFamily, loadAppearance, loadCustomThemes, resolveTheme, saveAppearance, saveCustomThemes } from './services/themeStorage';
 import {
-  defaultAsciiConfig,
   defaultSession,
   loadAsciiConfig,
   loadHistory,
@@ -55,6 +55,7 @@ import {
 } from './services/playlistOps';
 import { copyText } from './services/clipboard';
 import { openExternal } from './services/desktop';
+import { getVisibleLibraryCategories, loadSidebarPreferences, normalizeSidebarPreferences, resolveSidebarSelection, saveSidebarPreferences } from './services/sidebarStorage';
 
 import { TopSearchBar } from './components/TopSearchBar';
 import { Sidebar } from './components/Sidebar';
@@ -64,10 +65,7 @@ import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 import { BottomPlayerBar } from './components/BottomPlayerBar';
 import { AuthModal } from './components/AuthModal';
 import { ImportPlaylistModal } from './components/ImportPlaylistModal';
-import { HelpModal } from './components/HelpModal';
-import { CliModal } from './components/CliModal';
-import { ThemeModal } from './components/ThemeModal';
-import { ExportScriptModal } from './components/ExportScriptModal';
+import { SettingsModal, type PlaybackSettings, type SettingsTab } from './components/SettingsModal';
 import { CreatePlaylistModal } from './components/CreatePlaylistModal';
 import { ContextMenu, ContextMenuItem, ContextMenuState } from './components/ContextMenu';
 
@@ -75,7 +73,7 @@ import {
   Terminal, Eye, Disc, Activity, Sparkles, Layers, ListMusic, Compass, Link2,
   Play, Pause, SkipBack, SkipForward, ListStart, ListEnd, ListPlus, Heart, Trash2,
   Copy, CopyPlus, Link as LinkIcon, ExternalLink, Search, Shuffle, Repeat, Volume2, Pencil, FolderPlus,
-  Palette, HelpCircle, FolderOpen,
+  Settings, HelpCircle, FolderOpen,
 } from 'lucide-react';
 
 export default function App() {
@@ -94,6 +92,9 @@ export default function App() {
   const [session, setSession] = useState<UserSession>(loadUserSession);
 
   const initialPreferences = React.useMemo(() => loadPlayerPreferences(), []);
+  const [sidebarPreferences, setSidebarPreferences] = useState<SidebarPreferences>(loadSidebarPreferences);
+  const visibleLibraryCategories = React.useMemo(() => getVisibleLibraryCategories(sidebarPreferences), [sidebarPreferences]);
+  const hasSidebar = visibleLibraryCategories.length > 0 || sidebarPreferences.showPlaylists;
 
   // Library & Playlists State
   const [playlists, setPlaylists] = useState<Playlist[]>(loadPlaylists);
@@ -101,8 +102,10 @@ export default function App() {
   const [accountLikedTracks, setAccountLikedTracks] = useState<Track[]>(loadAccountLikedTracks);
   const [history, setHistory] = useState<Track[]>(loadHistory);
   const [exploreTracks, setExploreTracks] = useState<Track[]>([]);
-  const [activeCategory, setActiveCategory] = useState<LibraryCategory | null>(initialPreferences.activeCategory);
-  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
+  const initialSidebarSelection = React.useMemo(() => resolveSidebarSelection(sidebarPreferences, playlists,
+    { activeCategory: initialPreferences.activeCategory, selectedPlaylistId: null }), []);
+  const [activeCategory, setActiveCategory] = useState<LibraryCategory | null>(initialSidebarSelection.activeCategory);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(initialSidebarSelection.selectedPlaylist);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [playingPlaylistId, setPlayingPlaylistId] = useState<string | null>(null);
   const [playingCategory, setPlayingCategory] = useState<LibraryCategory | null>(null);
@@ -124,10 +127,7 @@ export default function App() {
   // Modals
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [showImportModal, setShowImportModal] = useState<boolean>(false);
-  const [showHelpModal, setShowHelpModal] = useState<boolean>(false);
-  const [showCliModal, setShowCliModal] = useState<boolean>(false);
-  const [showThemeModal, setShowThemeModal] = useState<boolean>(false);
-  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(null);
   const [showCreatePlaylistModal, setShowCreatePlaylistModal] = useState<boolean>(false);
   const [createSeedTracks, setCreateSeedTracks] = useState<Track[] | null>(null);
   const [renamingPlaylist, setRenamingPlaylist] = useState<Playlist | null>(null);
@@ -159,6 +159,7 @@ export default function App() {
   });
 
   useEffect(() => {
+    audioEngine.setFormat(initialPreferences.audioFormat);
     audioEngine.setVolume(initialPreferences.volume);
     if (initialPreferences.isMuted) {
       audioEngine.mute();
@@ -166,6 +167,19 @@ export default function App() {
       audioEngine.unMute();
     }
   }, [initialPreferences]);
+
+  useEffect(() => {
+    const next = resolveSidebarSelection(sidebarPreferences, playlists,
+      { activeCategory, selectedPlaylistId: selectedPlaylist?.id || null });
+    const sourceChanged = next.activeCategory !== activeCategory || next.selectedPlaylist?.id !== selectedPlaylist?.id;
+    if (next.activeCategory !== activeCategory) setActiveCategory(next.activeCategory);
+    if (next.selectedPlaylist !== selectedPlaylist) setSelectedPlaylist(next.selectedPlaylist);
+    if (sourceChanged) {
+      setSelectedAlbum(null);
+      setSelectedTrackIndex(0);
+    }
+    if (!hasSidebar) setIsSidebarFocused(false);
+  }, [sidebarPreferences, playlists, activeCategory, selectedPlaylist, hasSidebar]);
 
   // Fetch Live YouTube Music Explore Feed on Mount
   const fetchExploreFeed = useCallback(async () => {
@@ -176,20 +190,6 @@ export default function App() {
         const allTracks: Track[] = data.categories.flatMap((cat: any) => cat.tracks || []);
         if (allTracks.length > 0) {
           setExploreTracks(allTracks);
-
-          // Initialize current track from YouTube Music live feed
-          setPlayerState((prev) => {
-            if (!prev.currentTrack) {
-              return {
-                ...prev,
-                currentTrack: allTracks[0],
-                queue: allTracks,
-                queueIndex: 0,
-                duration: allTracks[0].duration || 210,
-              };
-            }
-            return prev;
-          });
 
           // Generate dynamic live playlists from YouTube Music categories
           const dynamicPlaylists: Playlist[] = data.categories.map((cat: any) => ({
@@ -329,8 +329,19 @@ export default function App() {
     if (activeCategory === 'podcasts') {
       return exploreTracks.slice(10, 25);
     }
-    return exploreTracks;
+    return activeCategory ? exploreTracks : [];
   }, [isSearching, searchResults, selectedPlaylist, activeCategory, exploreTracks, selectedAlbum, playlists, likedTrackIds, history, accountLikedTracks]);
+
+  useEffect(() => {
+    if (playerState.currentTrack || isSearching || displayedTracks.length === 0) return;
+    setPlayerState(previous => previous.currentTrack ? previous : {
+      ...previous,
+      currentTrack: displayedTracks[0],
+      queue: displayedTracks,
+      queueIndex: 0,
+      duration: displayedTracks[0].duration || 210,
+    });
+  }, [displayedTracks, isSearching, playerState.currentTrack]);
 
   const selectedVideoId = displayedTracks[selectedTrackIndex]?.youtubeId;
   const nextQueueIndex = playerState.queueIndex + 1 < playerState.queue.length
@@ -450,6 +461,7 @@ export default function App() {
   const currentViewTitle = React.useMemo(() => {
     if (isSearching) return `YouTube Search Results for "${searchQuery}"`;
     if (selectedPlaylist) return selectedPlaylist.title;
+    if (!activeCategory) return sidebarPreferences.showPlaylists ? 'Your playlists' : 'Your music';
     if (activeCategory === 'explore') return 'YouTube Music Live Charts & Trending';
     if (activeCategory === 'liked_songs') return 'Liked Songs (Favorites)';
     if (activeCategory === 'recently_played') return 'Recently Played Tracks';
@@ -458,7 +470,7 @@ export default function App() {
     if (activeCategory === 'artists') return 'Top Artists Library';
     if (activeCategory === 'podcasts') return 'Podcasts, Classical & Ambient Space';
     return 'YouTube Music Stream';
-  }, [isSearching, searchQuery, selectedPlaylist, activeCategory, selectedAlbum]);
+  }, [isSearching, searchQuery, selectedPlaylist, activeCategory, selectedAlbum, sidebarPreferences.showPlaylists]);
 
   // Load HD cover artwork when active track changes
   useEffect(() => {
@@ -594,8 +606,8 @@ export default function App() {
 
   // Play / Pause Toggle
   const handleTogglePlay = useCallback(() => {
-    if (!playerState.currentTrack && displayedTracks.length > 0) {
-      handlePlayTrack(displayedTracks[0]);
+    if (!playerState.currentTrack) {
+      if (displayedTracks.length > 0) handlePlayTrack(displayedTracks[0]);
       return;
     }
     if (playerState.isPlaying) {
@@ -807,6 +819,7 @@ export default function App() {
   const handleVolumeChange = useCallback((vol: number) => {
     const bounded = Math.max(0, Math.min(100, Math.round(vol)));
     audioEngine.setVolume(bounded);
+    audioEngine.unMute();
     setPlayerState((prev) => ({ ...prev, volume: bounded, isMuted: false }));
     savePlayerPreferences({ volume: bounded, isMuted: false });
   }, []);
@@ -853,6 +866,29 @@ export default function App() {
     }
   }, []);
 
+  const handleChangeSidebarPreferences = (change: Partial<SidebarPreferences>) => {
+    const next = normalizeSidebarPreferences({ ...sidebarPreferences, ...change });
+    setSidebarPreferences(next);
+    try { saveSidebarPreferences(next); }
+    catch { showToast('Sidebar preferences apply for this session but could not be saved.'); }
+  };
+
+  const handleChangeAsciiConfig = (change: Partial<AsciiConfig>) => {
+    const next = { ...asciiConfig, ...change };
+    setAsciiConfig(next);
+    saveAsciiConfig(next);
+  };
+
+  const handleChangePreferences = (change: Partial<PlaybackSettings>) => {
+    if (change.volume !== undefined) handleVolumeChange(change.volume);
+    if (change.isMuted !== undefined && change.isMuted !== playerState.isMuted) handleToggleMute();
+    if (change.audioFormat !== undefined) {
+      audioEngine.setFormat(change.audioFormat);
+      setPlayerState(previous => ({ ...previous, audioFormat: change.audioFormat }));
+    }
+    savePlayerPreferences(change);
+  };
+
   // Toggle Like Status
   const handleToggleLike = useCallback(
     (track?: Track) => {
@@ -884,19 +920,18 @@ export default function App() {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (settingsTab !== null) return;
       const isInput =
         document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement;
+        document.activeElement instanceof HTMLTextAreaElement ||
+        document.activeElement instanceof HTMLSelectElement;
       if (isInput) return;
+      if ((e.key === 'Enter' || e.key === ' ') && document.activeElement instanceof HTMLButtonElement) return;
 
-      if (showAuthModal || showImportModal || showHelpModal || showCliModal || showThemeModal || showExportModal || showCreatePlaylistModal || renamingPlaylist) {
+      if (showAuthModal || showImportModal || showCreatePlaylistModal || renamingPlaylist) {
         if (e.key === 'Escape') {
           setShowAuthModal(false);
           setShowImportModal(false);
-          setShowHelpModal(false);
-          setShowCliModal(false);
-          setShowThemeModal(false);
-          setShowExportModal(false);
           setShowCreatePlaylistModal(false);
           setRenamingPlaylist(null);
         }
@@ -983,8 +1018,10 @@ export default function App() {
           audioEngine.seekTo(Math.min(playerState.duration, playerState.currentTime + 5));
           break;
         case 'Tab':
-          e.preventDefault();
-          setIsSidebarFocused((prev) => !prev);
+          if (hasSidebar) {
+            e.preventDefault();
+            setIsSidebarFocused((prev) => !prev);
+          }
           break;
         case '1':
           e.preventDefault();
@@ -1002,17 +1039,9 @@ export default function App() {
           e.preventDefault();
           handleSetViewMode('visualizer');
           break;
-        case '5':
-          e.preventDefault();
-          setShowExportModal(true);
-          break;
         case 'i':
           e.preventDefault();
           setShowImportModal(true);
-          break;
-        case ':':
-          e.preventDefault();
-          setShowCliModal(true);
           break;
         case 't':
           e.preventDefault();
@@ -1024,7 +1053,7 @@ export default function App() {
           break;
         case '?':
           e.preventDefault();
-          setShowHelpModal(true);
+          setSettingsTab('help');
           break;
       }
     };
@@ -1042,14 +1071,12 @@ export default function App() {
     handleToggleLike,
     showAuthModal,
     showImportModal,
-    showHelpModal,
-    showCliModal,
-    showThemeModal,
-    showExportModal,
+    settingsTab,
     showCreatePlaylistModal,
     renamingPlaylist,
     themeId,
     availableThemes,
+    hasSidebar,
   ]);
 
   // YouTube Search Handler
@@ -1382,16 +1409,15 @@ export default function App() {
     },
     { id: 'new-playlist', label: 'New playlist…', icon: FolderPlus, onSelect: handleCreatePlaylist },
     { id: 'import', label: 'Import playlist…', icon: Link2, hint: 'i', onSelect: () => setShowImportModal(true) },
-    { id: 'theme', label: 'Themes & appearance…', icon: Palette, onSelect: () => setShowThemeModal(true) },
-    { id: 'help', label: 'Keyboard shortcuts', icon: HelpCircle, hint: '?', onSelect: () => setShowHelpModal(true) },
+    { id: 'settings', label: 'Settings…', icon: Settings, onSelect: () => setSettingsTab('general') },
+    { id: 'help', label: 'Keyboard shortcuts', icon: HelpCircle, hint: '?', onSelect: () => setSettingsTab('help') },
   ];
 
   const openMenu = (x: number, y: number, items: ContextMenuItem[], title?: string) =>
     setContextMenu({ x, y, items, title });
 
   const anyModalOpen =
-    showAuthModal || showImportModal || showHelpModal || showCliModal || showThemeModal ||
-    showExportModal || showCreatePlaylistModal || !!renamingPlaylist;
+    showAuthModal || showImportModal || settingsTab !== null || showCreatePlaylistModal || !!renamingPlaylist;
 
   const handleTrackListContextMenu = (target: { track?: Track; index?: number }, x: number, y: number) => {
     if (target.track && target.index !== undefined) {
@@ -1411,141 +1437,6 @@ export default function App() {
     openMenu(e.clientX, e.clientY, buildAppMenu(), 'YouTerm');
   };
 
-  // Execute CLI Command
-  const handleExecuteCli = (cmd: string): string => {
-    const parts = cmd.replace(/^:/, '').trim().split(' ');
-    const action = parts[0]?.toLowerCase();
-    const arg = parts.slice(1).join(' ');
-
-    switch (action) {
-      case 'play':
-      case 'p':
-        if (!arg) {
-          handleTogglePlay();
-          return `Toggled playback: ${playerState.isPlaying ? 'Paused' : 'Playing'}`;
-        }
-        const found = [...exploreTracks, ...history, ...searchResults].find(
-          (t) =>
-            t.title.toLowerCase().includes(arg.toLowerCase()) ||
-            t.artist.toLowerCase().includes(arg.toLowerCase())
-        );
-        if (found) {
-          handlePlayTrack(found);
-          return `Playing: "${found.title}" by ${found.artist}`;
-        }
-        return `Track not found for query: "${arg}". Use :search <term> to find tracks.`;
-
-      case 'search':
-      case 'find':
-      case '/':
-        setSearchQuery(arg);
-        setIsSearching(true);
-        handleSearchSubmit({ preventDefault: () => { } } as any);
-        return `Executing search for: "${arg}"...`;
-
-      case 'import':
-        if (!arg) {
-          setShowImportModal(true);
-          return 'Opening YouTube playlist import dialog...';
-        }
-        handleImportPlaylist(arg);
-        return `Importing playlist from: ${arg}...`;
-
-      case 'sync':
-        setShowAuthModal(true);
-        return 'Use Sync Playlists Now in the account dialog to sync your YouTube library.';
-
-      case 'explore':
-      case 'trending':
-        handleSetActiveCategory('explore');
-        setSelectedPlaylist(null);
-        setIsSearching(false);
-        fetchExploreFeed();
-        return 'Switched to YouTube Music Trending & Explore feed.';
-
-      case 'volume':
-      case 'vol':
-      case 'v':
-        const volNum = parseInt(arg, 10);
-        if (!isNaN(volNum) && volNum >= 0 && volNum <= 100) {
-          handleVolumeChange(volNum);
-          return `Volume adjusted to: ${volNum}%`;
-        }
-        return `Current volume: ${playerState.volume}% (Usage: :volume 0-100)`;
-
-      case 'theme':
-        const matchedTheme = availableThemes.find(
-          (value) => value.id.toLowerCase() === arg.toLowerCase() || value.name.toLowerCase().includes(arg.toLowerCase())
-        );
-        if (matchedTheme) {
-          setThemeId(matchedTheme.id);
-          saveThemeId(matchedTheme.id);
-          return `Theme switched to: ${matchedTheme.name}`;
-        }
-        return `Theme not found. Available: ${availableThemes.map(theme => theme.name).join(', ')}`;
-
-      case 'ascii':
-      case 'cover':
-      case 'mode':
-        if (['half_block', 'braille', 'original_hd'].includes(arg)) {
-          setAsciiConfig((prev) => {
-            const next = { ...prev, mode: arg as AsciiRenderMode };
-            saveAsciiConfig(next);
-            return next;
-          });
-          return `Cover Render Mode switched to: ${arg}`;
-        }
-        return `Usage: :cover <half_block | braille | original_hd>`;
-
-      case 'like':
-      case 'fav':
-        handleToggleLike();
-        return `Toggled like on current track: ${playerState.currentTrack?.title || 'None'}`;
-
-      case 'next':
-      case 'n':
-        handleNextTrack();
-        return 'Skipped to next track.';
-
-      case 'prev':
-        handlePrevTrack();
-        return 'Returned to previous track.';
-
-      case 'info':
-        return `ytmusic-tui v1.2.0 | Host: ${session.username}@${session.hostname} | Current: "${playerState.currentTrack?.title || 'None'}" (${playerState.currentTrack?.artist || 'None'}) | View: ${viewMode}`;
-
-      case 'help':
-      case 'h':
-      case '?':
-        return `Available commands:
-  :play <name>       - Search and play track immediately
-  :search <query>    - Search YouTube Music library
-  :import <url>      - Import YouTube / YT Music playlist
-  :sync              - Sync account playlists with YouTube
-  :explore           - Show live YouTube trending charts
-  :volume <0-100>    - Set master playback volume
-  :theme <name>      - Change Unix terminal theme
-  :cover <mode>      - Switch cover render mode (or :ascii)
-  :like              - Like/heart currently playing track
-  :next / :prev      - Skip / previous track
-  :info              - Display system & stream metadata
-  :clear             - Clear terminal screen
-  :exit / :q         - Close CLI`;
-
-      default:
-        return `Unknown command: "${action}". Type :help for a list of valid commands.`;
-    }
-  };
-
-  // Cycle ASCII mode helper
-  const handleCycleAsciiMode = () => {
-    const modes: AsciiRenderMode[] = ['half_block', 'braille', 'original_hd'];
-    const curIdx = modes.indexOf(asciiConfig.mode);
-    const nextMode = modes[(curIdx + 1) % modes.length];
-    const newConfig = { ...asciiConfig, mode: nextMode };
-    setAsciiConfig(newConfig);
-    saveAsciiConfig(newConfig);
-  };
 
   return (
     <div
@@ -1573,7 +1464,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <span className="font-bold text-xs flex items-center gap-1.5" style={{ color: theme.highlight }}>
                 <Terminal className="w-3.5 h-3.5" style={{ color: theme.accent }} />
-                <span>YouTerm v0.1.0</span>
+                <span>YouTerm v{appVersion}</span>
               </span>
             </div>
 
@@ -1644,11 +1535,9 @@ export default function App() {
             }}
             onSearchSubmit={handleSearchSubmit}
             isLoading={isLoadingSearch}
-            onOpenHelp={() => setShowHelpModal(true)}
             onOpenAuth={() => setShowAuthModal(true)}
-            onOpenTheme={() => setShowThemeModal(true)}
-            asciiMode={asciiConfig.mode === 'original_hd' ? 'HD (Original)' : asciiConfig.mode.replace('_', '-')}
-            onCycleAsciiMode={handleCycleAsciiMode}
+            onOpenSettings={() => setSettingsTab('general')}
+            isModalOpen={anyModalOpen}
             isSearching={isSearching}
           />
 
@@ -1657,6 +1546,8 @@ export default function App() {
             {/* Left Sidebar: Library & Playlists */}
             <Sidebar
               theme={theme}
+              preferences={sidebarPreferences}
+              onChangePreferences={handleChangeSidebarPreferences}
               activeCategory={activeCategory}
               selectedPlaylistId={selectedPlaylist?.id || null}
               playingPlaylistId={playingPlaylistId}
@@ -1730,14 +1621,7 @@ export default function App() {
                 track={playerState.currentTrack}
                 asciiResult={asciiResult}
                 asciiConfig={asciiConfig}
-                onChangeConfig={(partial) => {
-                  const updated = { ...asciiConfig, ...partial };
-                  setAsciiConfig(updated);
-                  saveAsciiConfig(updated);
-                  if (playerState.currentTrack) {
-                    updateAsciiCover(playerState.currentTrack, updated);
-                  }
-                }}
+                onChangeConfig={handleChangeAsciiConfig}
                 onRefresh={() => {
                   if (playerState.currentTrack) {
                     updateAsciiCover(playerState.currentTrack, asciiConfig);
@@ -1789,12 +1673,7 @@ export default function App() {
                     track={playerState.currentTrack}
                     asciiResult={asciiResult}
                     asciiConfig={asciiConfig}
-                    onChangeConfig={(partial) => {
-                      const updated = { ...asciiConfig, ...partial };
-                      setAsciiConfig(updated);
-                      saveAsciiConfig(updated);
-                      if (playerState.currentTrack) updateAsciiCover(playerState.currentTrack, updated);
-                    }}
+                    onChangeConfig={handleChangeAsciiConfig}
                     onRefresh={() => {
                       if (playerState.currentTrack) updateAsciiCover(playerState.currentTrack, asciiConfig);
                     }}
@@ -1885,26 +1764,25 @@ export default function App() {
         />
       )}
 
-      {showHelpModal && (
-        <HelpModal
-          theme={theme}
-          onClose={() => setShowHelpModal(false)}
-        />
-      )}
-
-      {showCliModal && (
-        <CliModal
-          theme={theme}
-          onExecuteCommand={handleExecuteCli}
-          onClose={() => setShowCliModal(false)}
-        />
-      )}
-
-      {showThemeModal && (
-        <ThemeModal
+      {settingsTab !== null && (
+        <SettingsModal
+          initialTab={settingsTab}
+          sidebarPreferences={sidebarPreferences}
+          onChangeSidebarPreferences={handleChangeSidebarPreferences}
           currentTheme={theme}
           customThemes={customThemes}
           appearance={appearance}
+          preferences={{
+            volume: playerState.volume,
+            isMuted: playerState.isMuted,
+            audioFormat: playerState.audioFormat || initialPreferences.audioFormat,
+          }}
+          onChangePreferences={handleChangePreferences}
+          isChangingFormat={!!playerState.isChangingFormat}
+          session={session}
+          onSaveSession={newSession => { setSession(newSession); saveUserSession(newSession); }}
+          onSyncAccount={handleSyncAccount}
+          onDisconnect={() => { setSession(defaultSession); saveUserSession(defaultSession); }}
           onChangeAppearance={(value) => { saveAppearance(value); setAppearance(value); }}
           onSaveCustomTheme={(value) => {
             const next = [...customThemes.filter(theme => theme.id !== value.id), value];
@@ -1917,20 +1795,13 @@ export default function App() {
             const next = customThemes.filter(theme => theme.id !== id);
             saveCustomThemes(next);
             setCustomThemes(next);
-            if (themeId === id) { setThemeId('clean_minimalism'); saveThemeId('clean_minimalism'); }
+            if (themeId === id) { setThemeId(DEFAULT_THEME_ID); saveThemeId(DEFAULT_THEME_ID); }
           }}
           onSelectTheme={(tId) => {
             setThemeId(tId);
             saveThemeId(tId);
           }}
-          onClose={() => setShowThemeModal(false)}
-        />
-      )}
-
-      {showExportModal && (
-        <ExportScriptModal
-          theme={theme}
-          onClose={() => setShowExportModal(false)}
+          onClose={() => setSettingsTab(null)}
         />
       )}
 

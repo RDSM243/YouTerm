@@ -1,4 +1,4 @@
-import { THEMES } from '../data/themes';
+import { DEFAULT_THEME_ID, THEMES } from '../data/themes';
 import { loadCustomThemes } from './themeStorage';
 import { AsciiConfig, LibraryCategory, Playlist, ThemeId, Track, TuiViewMode, UserSession } from '../types';
 
@@ -150,7 +150,7 @@ export function loadThemeId(): ThemeId {
     const raw = localStorage.getItem(STORAGE_KEYS.THEME) as ThemeId;
     if (raw && (Object.hasOwn(THEMES, raw) || loadCustomThemes().some(theme => theme.id === raw))) return raw;
   } catch (e) {}
-  return 'clean_minimalism';
+  return DEFAULT_THEME_ID;
 }
 
 export function saveThemeId(themeId: ThemeId): void {
@@ -164,7 +164,7 @@ export function loadAsciiConfig(): AsciiConfig {
     const raw = localStorage.getItem(STORAGE_KEYS.ASCII_CONFIG);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const validModes = ['half_block', 'braille', 'original_hd'];
+      const validModes = ['half_block', 'braille', 'original_hd', 'matrix_code', 'retro_crt'];
       if (parsed && !validModes.includes(parsed.mode)) {
         parsed.mode = 'half_block';
       }
@@ -194,7 +194,7 @@ export function loadPlayerPreferences(): PlayerPreferences {
           shuffle: typeof parsed.shuffle === 'boolean' ? parsed.shuffle : defaultPlayerPreferences.shuffle,
           repeat: ['off', 'all', 'one'].includes(parsed.repeat) ? parsed.repeat : defaultPlayerPreferences.repeat,
           audioFormat: ['m4a', 'webm'].includes(parsed.audioFormat) ? parsed.audioFormat : defaultPlayerPreferences.audioFormat,
-          viewMode: ['tracklist', 'ascii_cover', 'split', 'visualizer', 'lyrics', 'cli', 'export_script'].includes(parsed.viewMode)
+          viewMode: ['tracklist', 'ascii_cover', 'split', 'visualizer', 'lyrics'].includes(parsed.viewMode)
             ? parsed.viewMode
             : defaultPlayerPreferences.viewMode,
           activeCategory: ['explore', 'made_for_you', 'recently_played', 'liked_songs', 'albums', 'artists', 'podcasts'].includes(parsed.activeCategory)

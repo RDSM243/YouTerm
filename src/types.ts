@@ -55,14 +55,20 @@ export type LibraryCategory =
   | 'podcasts'
   | 'explore';
 
+export interface SidebarPreferences {
+  showLibrary: boolean;
+  showPlaylists: boolean;
+  libraryItems: Record<LibraryCategory, boolean>;
+  libraryExpanded: boolean;
+  playlistsExpanded: boolean;
+}
+
 export type TuiViewMode =
   | 'tracklist'
   | 'ascii_cover'
   | 'split'
   | 'visualizer'
-  | 'lyrics'
-  | 'cli'
-  | 'export_script';
+  | 'lyrics';
 
 export type AsciiRenderMode =
   | 'half_block'    // ANSI Half-Block (24-bit TrueColor) ▀

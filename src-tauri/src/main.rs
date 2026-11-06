@@ -266,15 +266,23 @@ fn build_initialization_script(smoke_test: bool) -> String {
             r#"
 (function() {
   const checkUi = () => {
-    const ready = !!document.querySelector('[title*="Color Theme"]');
+    const button = document.querySelector('button[aria-label="Open settings"]');
+    const ready = !!button;
     if (!ready) {
       setTimeout(checkUi, 250);
+      return;
+    }
+    const dialog = document.querySelector('[role="dialog"][aria-labelledby="settings-title"]');
+    if (!dialog) {
+      button.click();
+      setTimeout(checkUi, 150);
       return;
     }
     const payload = {
       ready: true,
       bridge: window.__YOUTERM_DESKTOP__?.platform === 'linux',
-      themes: !!document.querySelector('[title*="Color Theme"]'),
+      settings: dialog.querySelectorAll('[role="tab"]').length === 6,
+      themes: !!dialog.querySelector('#settings-tab-themes'),
       audio: !!(new Audio().canPlayType('audio/mp4; codecs="mp4a.40.2"') || new Audio().canPlayType('audio/webm; codecs="opus"')),
       font: getComputedStyle(document.body).fontFamily,
       width: window.innerWidth,

@@ -151,6 +151,10 @@ pub async fn smoke_test_report(
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
         && native_report
+            .get("settings")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        && native_report
             .get("themes")
             .and_then(|v| v.as_bool())
             .unwrap_or(false)

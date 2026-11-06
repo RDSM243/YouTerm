@@ -1,4 +1,4 @@
-import { THEMES } from '../data/themes';
+import { DEFAULT_THEME_ID, THEMES } from '../data/themes';
 import type { AppearanceConfig, ThemeConfig, ThemeId } from '../types';
 
 const CUSTOM_THEMES_KEY = 'youterm_custom_themes_v1';
@@ -42,7 +42,7 @@ export function validateCustomTheme(value: unknown): ThemeConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Choose a valid YouTerm theme JSON file.');
   const input = value as Record<string, unknown>;
   if (typeof input.name !== 'string' || !input.name.trim() || input.name.length > 60) throw new Error('Theme name must contain 1–60 characters.');
-  const result = { ...THEMES.clean_minimalism, name: input.name.trim(),
+  const result = { ...THEMES[DEFAULT_THEME_ID], name: input.name.trim(),
     id: typeof input.id === 'string' && /^custom_[a-zA-Z0-9_-]{1,80}$/.test(input.id)
       ? input.id as ThemeId : `custom_${crypto.randomUUID()}` as ThemeId };
   for (const field of Object.keys(THEME_COLORS) as ThemeColor[]) {
@@ -93,7 +93,7 @@ export function saveCustomThemes(themes: ThemeConfig[]): void {
 }
 
 export function resolveTheme(id: ThemeId, customThemes: ThemeConfig[]): ThemeConfig {
-  return customThemes.find(theme => theme.id === id) || (Object.hasOwn(THEMES, id) ? THEMES[id as keyof typeof THEMES] : THEMES.clean_minimalism);
+  return customThemes.find(theme => theme.id === id) || (Object.hasOwn(THEMES, id) ? THEMES[id as keyof typeof THEMES] : THEMES[DEFAULT_THEME_ID]);
 }
 
 export function normalizeAppearance(value: unknown): AppearanceConfig {

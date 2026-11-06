@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { AsciiConfig, AsciiRenderMode, AsciiResult, Track, ThemeConfig } from '../types';
+import { COVER_MODES } from '../data/settings';
 import { loadCoverArtwork, type CoverArtwork } from '../services/coverArtwork';
-import { Copy, Download, Sliders, RefreshCw, Check, Image as ImageIcon, Sparkles, ExternalLink, Eye, ChevronDown } from 'lucide-react';
+import { Copy, Download, RefreshCw, Check, Image as ImageIcon, Sparkles, ExternalLink, Eye, ChevronDown } from 'lucide-react';
 
 interface AsciiArtViewerProps {
   theme: ThemeConfig;
   track: Track | null;
   asciiResult: AsciiResult | null;
   asciiConfig: AsciiConfig;
-  onChangeConfig: (newConfig: Partial<AsciiConfig>) => void;
+  onChangeConfig: (change: Partial<AsciiConfig>) => void;
   onRefresh: () => void;
   isLoading: boolean;
 }
@@ -24,7 +25,6 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
-  const [showControls, setShowControls] = useState(true);
   const [artwork, setArtwork] = useState<(CoverArtwork & { key: string }) | null>(null);
   const [artworkFailed, setArtworkFailed] = useState(false);
   const [artworkRevision, setArtworkRevision] = useState(0);
@@ -45,14 +45,6 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
     });
     return () => controller.abort();
   }, [needsArtwork, track?.thumbnailUrl, track?.youtubeId, artworkKey, artworkRevision]);
-
-  const modes: { id: AsciiRenderMode; label: string }[] = [
-    { id: 'half_block', label: 'ANSI Half-Block (24-bit TrueColor)' },
-    { id: 'braille', label: 'Braille Matrix (⠶⠿⣶)' },
-    { id: 'original_hd', label: 'Original Image (HD)' },
-    { id: 'matrix_code', label: 'Matrix Code (Digital Rain)' },
-    { id: 'retro_crt', label: 'Retro Monochrome CRT' },
-  ];
 
   const handleCopyText = () => {
     if (!track) return;
@@ -125,7 +117,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
     <div className="flex-1 flex flex-col min-h-0 relative select-none font-mono overflow-hidden">
       {/* Top Header */}
       <div
-        className="px-4 py-2 border-b flex items-center justify-between z-10 text-xs"
+        className="px-4 py-2 border-b flex shrink-0 flex-wrap items-center justify-between gap-2 z-10 text-xs"
         style={{
           borderColor: theme.border,
           backgroundColor: theme.cardBg,
@@ -153,19 +145,6 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
               <span>{showOriginal ? '[Hide Orig]' : '[Show Orig]'}</span>
             </button>
           )}
-
-          <button
-            onClick={() => setShowControls(!showControls)}
-            className="px-2 py-0.5 border text-[11px] flex items-center gap-1 hover:brightness-125"
-            style={{
-              borderColor: theme.border,
-              color: showControls ? theme.accent : theme.text,
-              backgroundColor: theme.bg,
-            }}
-          >
-            <Sliders className="w-3 h-3" />
-            <span>[Settings]</span>
-          </button>
 
           <button
             onClick={handleCopyText}
@@ -205,106 +184,61 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
         </div>
       </div>
 
-      {/* Settings Sub-Bar */}
-      {showControls && (
-        <div
-          className="px-4 py-2 border-b grid grid-cols-1 md:grid-cols-4 gap-3 text-xs"
-          style={{
-            borderColor: theme.border,
-            backgroundColor: theme.bg,
-          }}
-        >
-          {/* Mode Selection */}
-          <div className="flex flex-col gap-1 min-w-0">
-            <span className="text-[10px] font-bold tracking-wider" style={{ color: theme.textDim }}>RENDER MODE</span>
-            <div className="relative flex items-center">
-              <select
-                value={asciiConfig.mode}
-                onChange={(e) => onChangeConfig({ mode: e.target.value as AsciiRenderMode })}
-                className="w-full border px-2.5 py-1 pr-7 text-xs outline-none cursor-pointer appearance-none font-mono"
-                style={{ borderColor: theme.border, color: theme.highlight, backgroundColor: theme.cardBg }}
-              >
-                {modes.map((m) => (
-                  <option key={m.id} value={m.id} style={{ backgroundColor: theme.bg, color: theme.text }}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 pointer-events-none absolute right-2" style={{ color: theme.accent }} />
-            </div>
-          </div>
+      <div role="group" aria-label="Cover art controls"
+        className="grid shrink-0 grid-cols-1 gap-3 border-b px-4 py-2 text-xs sm:grid-cols-2 xl:grid-cols-4"
+        style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-[10px] font-bold tracking-wider" style={{ color: theme.textDim }}>RENDER MODE</span>
+          <span className="relative flex items-center">
+            <select aria-label="Cover render mode" value={asciiConfig.mode}
+              onChange={event => onChangeConfig({ mode: event.target.value as AsciiRenderMode })}
+              className="w-full min-w-0 border px-2.5 py-1 pr-7 text-xs outline-none cursor-pointer font-mono"
+              style={{ borderColor: theme.border, color: theme.highlight, backgroundColor: theme.cardBg }}>
+              {COVER_MODES.map(mode => <option key={mode.id} value={mode.id} style={{ backgroundColor: theme.bg, color: theme.text }}>{mode.label}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5" style={{ color: theme.accent }} />
+          </span>
+        </label>
 
-          {/* Width / Resolution Slider */}
-          <div className="flex flex-col gap-1">
-            <div className="flex justify-between text-[10px]" style={{ color: theme.textDim }}>
-              <span>{asciiConfig.mode === 'original_hd' ? 'DISPLAY SIZE:' : 'WIDTH (COLS):'}</span>
-              <span style={{ color: theme.accent }}>
-                {asciiConfig.mode === 'original_hd' ? `${Math.round(asciiConfig.width / 96 * 100)}%` : `${asciiConfig.width} chars`}
-              </span>
-            </div>
-            <input
-              type="range"
-              min="24"
-              max="96"
-              step="4"
-              value={asciiConfig.width}
-              onChange={(e) => onChangeConfig({ width: Number(e.target.value) })}
-              className="accent-[#87cf3e] cursor-pointer"
-            />
-          </div>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="flex justify-between gap-2 text-[10px]" style={{ color: theme.textDim }}>
+            <span>{asciiConfig.mode === 'original_hd' ? 'DISPLAY SIZE:' : 'WIDTH (COLS):'}</span>
+            <span style={{ color: theme.accent }}>{asciiConfig.mode === 'original_hd' ? `${Math.round(asciiConfig.width / 96 * 100)}%` : `${asciiConfig.width} chars`}</span>
+          </span>
+          <input aria-label={asciiConfig.mode === 'original_hd' ? 'Cover display size' : 'ASCII width'}
+            type="range" min={24} max={96} step={4} value={asciiConfig.width}
+            onChange={event => onChangeConfig({ width: Number(event.target.value) })}
+            className="cursor-pointer" style={{ accentColor: theme.accent }} />
+        </label>
 
-          {/* Contrast Slider */}
-          <div className="flex flex-col gap-1">
-            <div className="flex justify-between text-[10px]" style={{ color: theme.textDim }}>
-              <span>CONTRAST:</span>
-              <span style={{ color: theme.accent }}>{asciiConfig.contrast}%</span>
-            </div>
-            <input
-              type="range"
-              min="-50"
-              max="80"
-              step="5"
-              value={asciiConfig.contrast}
-              onChange={(e) => onChangeConfig({ contrast: Number(e.target.value) })}
-              className="accent-[#87cf3e] cursor-pointer"
-            />
-          </div>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="flex justify-between gap-2 text-[10px]" style={{ color: theme.textDim }}>
+            <span>CONTRAST:</span><span style={{ color: theme.accent }}>{asciiConfig.contrast}%</span>
+          </span>
+          <input aria-label="Cover contrast" type="range" min={-50} max={80} step={5} value={asciiConfig.contrast}
+            onChange={event => onChangeConfig({ contrast: Number(event.target.value) })}
+            className="cursor-pointer" style={{ accentColor: theme.accent }} />
+        </label>
 
-          {/* Color & Invert Toggles */}
-          <div className="flex items-center gap-3 pt-2">
-            <label className="flex items-center gap-1 cursor-pointer text-[11px]">
-              <input
-                type="checkbox"
-                checked={asciiConfig.colorEnabled}
-                onChange={(e) => onChangeConfig({ colorEnabled: e.target.checked })}
-                className="accent-[#87cf3e]"
-              />
-              <span style={{ color: asciiConfig.colorEnabled ? theme.highlight : theme.textDim }}>
-                {asciiConfig.mode === 'original_hd' ? 'TrueColor' : 'ANSI Color'}
-              </span>
-            </label>
-
-            <label className="flex items-center gap-1 cursor-pointer text-[11px]">
-              <input
-                type="checkbox"
-                checked={asciiConfig.inverted}
-                onChange={(e) => onChangeConfig({ inverted: e.target.checked })}
-                className="accent-[#87cf3e]"
-              />
-              <span style={{ color: asciiConfig.inverted ? theme.highlight : theme.textDim }}>Invert</span>
-            </label>
-
-            <button
-              onClick={() => asciiConfig.mode === 'original_hd' ? setArtworkRevision(value => value + 1) : onRefresh()}
-              className="px-2 py-0.5 border text-[10px] ml-auto hover:brightness-125 flex items-center gap-1"
-              style={{ borderColor: theme.border, color: theme.text }}
-            >
-              <RefreshCw className={`w-2.5 h-2.5 ${(asciiConfig.mode === 'original_hd' ? !currentArtwork && !artworkFailed : isLoading) ? 'animate-spin' : ''}`} />
-              <span>{asciiConfig.mode === 'original_hd' ? 'Reload' : 'Rerender'}</span>
-            </button>
-          </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-3 pt-2 text-[11px]">
+          <label className="flex cursor-pointer items-center gap-1">
+            <input type="checkbox" checked={asciiConfig.colorEnabled}
+              onChange={event => onChangeConfig({ colorEnabled: event.target.checked })} style={{ accentColor: theme.accent }} />
+            <span style={{ color: asciiConfig.colorEnabled ? theme.highlight : theme.textDim }}>{asciiConfig.mode === 'original_hd' ? 'TrueColor' : 'ANSI Color'}</span>
+          </label>
+          <label className="flex cursor-pointer items-center gap-1">
+            <input type="checkbox" checked={asciiConfig.inverted}
+              onChange={event => onChangeConfig({ inverted: event.target.checked })} style={{ accentColor: theme.accent }} />
+            <span style={{ color: asciiConfig.inverted ? theme.highlight : theme.textDim }}>Invert</span>
+          </label>
+          <button type="button" onClick={() => asciiConfig.mode === 'original_hd' ? setArtworkRevision(value => value + 1) : onRefresh()}
+            className="ml-auto flex items-center gap-1 border px-2 py-0.5 text-[10px] hover:brightness-125"
+            style={{ borderColor: theme.border, color: theme.text }}>
+            <RefreshCw className={`h-2.5 w-2.5 ${(asciiConfig.mode === 'original_hd' ? !currentArtwork && !artworkFailed : isLoading) ? 'animate-spin' : ''}`} />
+            <span>{asciiConfig.mode === 'original_hd' ? 'Reload' : 'Rerender'}</span>
+          </button>
         </div>
-      )}
+      </div>
 
       {/* Main Canvas & Metadata */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
@@ -349,7 +283,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
                   alt={track.title}
                   className="max-h-[65vh] max-w-full object-contain"
                   style={{
-                    filter: `contrast(${asciiConfig.contrast + 100}%) ${asciiConfig.inverted ? 'invert(1)' : ''} ${!asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
+                    filter: `contrast(${asciiConfig.contrast + 100}%) brightness(${100 + asciiConfig.brightness * 10}%) ${asciiConfig.inverted ? 'invert(1)' : ''} ${!asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
                     width: `${Math.min(currentArtwork?.width || 800, Math.max(220, asciiConfig.width / 96 * 800))}px`,
                   }}
                 />
@@ -471,7 +405,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
               <div>
                 <span style={{ color: theme.textDim }}>Render Mode: </span>
                 <span className="px-1 border text-[10px]" style={{ borderColor: theme.border, color: theme.accent }}>
-                  {modes.find((m) => m.id === asciiConfig.mode)?.label || asciiConfig.mode}
+                  {COVER_MODES.find((m) => m.id === asciiConfig.mode)?.label || asciiConfig.mode}
                 </span>
               </div>
             </div>

@@ -10,6 +10,8 @@ interface AuthModalProps {
   onSaveSession: (session: UserSession) => void;
   onSyncAccount: (session?: UserSession) => Promise<string>;
   onClose: () => void;
+  embedded?: boolean;
+  onDisconnect?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -18,6 +20,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onSaveSession,
   onSyncAccount,
   onClose,
+  embedded = false,
+  onDisconnect,
 }) => {
   const [apiKey, setApiKey] = useState(session.apiKey || '');
   const [accessToken, setAccessToken] = useState(session.accessToken || '');
@@ -26,8 +30,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [authStatus, setAuthStatus] = useState<string | null>(null);
   const oauthAbortRef = useRef<AbortController | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  useEffect(() => () => oauthAbortRef.current?.abort(), []);
+  useEffect(() => () => {
+    oauthAbortRef.current?.abort();
+    clearTimeout(saveTimerRef.current);
+  }, []);
 
   const draftSession = (): UserSession => ({
     ...session,
@@ -43,9 +51,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     e.preventDefault();
     onSaveSession(draftSession());
     setIsSaved(true);
-    setTimeout(() => {
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
       setIsSaved(false);
-      onClose();
+      if (!embedded) onClose();
     }, 1000);
   };
 
@@ -95,17 +104,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 font-mono select-none overflow-y-auto">
+    <div className={embedded ? '' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 font-mono select-none overflow-y-auto'}>
       <div
-        className="w-full max-w-xl border p-5 shadow-2xl relative flex flex-col gap-4 text-xs my-auto"
-        style={{
+        className={embedded ? 'flex flex-col gap-4 text-xs' : 'w-full max-w-xl border p-5 shadow-2xl relative flex flex-col gap-4 text-xs my-auto'}
+        style={embedded ? { color: theme.text } : {
           borderColor: theme.accent,
           backgroundColor: theme.cardBg,
           boxShadow: `0 0 30px ${theme.accentGlow}`,
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: theme.border }}>
+        {!embedded && <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: theme.border }}>
           <div className="flex items-center gap-2 font-bold text-sm" style={{ color: theme.highlight }}>
             <ShieldCheck className="w-4 h-4" style={{ color: theme.accent }} />
             <span>┌─ YouTube Music Backend & Account Connection ─</span>
@@ -117,7 +126,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           >
             [Esc / Close]
           </button>
-        </div>
+        </div>}
+
+        {embedded && <div className="flex items-center justify-between gap-3 border p-3" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+          <div className="min-w-0">
+            <p className="font-bold" style={{ color: theme.highlight }}>{session.isLoggedIn ? 'Connected to YouTube Music' : 'Log in to YouTube Music'}</p>
+            <p className="mt-1 break-words" style={{ color: theme.textDim }}>{session.isLoggedIn ? session.email || session.username : 'Connect your Google account to sync playlists and liked songs.'}</p>
+          </div>
+          {session.isLoggedIn && onDisconnect && <button type="button" disabled={isConnecting || isSyncing}
+            className="shrink-0 border px-3 py-1.5 hover:brightness-125 disabled:opacity-40"
+            style={{ borderColor: theme.border, color: theme.warning }} onClick={() => {
+              onDisconnect(); setAccessToken(''); setApiKey(''); setAuthStatus('Account disconnected.');
+            }}>Log out</button>}
+        </div>}
 
         {/* Status banner */}
         <div className="border p-3 flex items-start gap-2.5" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
@@ -239,14 +260,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {/* Action buttons */}
           <div className="flex justify-end gap-2 pt-2 border-t" style={{ borderColor: theme.border }}>
-            <button
+            {!embedded && <button
               type="button"
               onClick={onClose}
               className="px-3 py-1 border hover:opacity-80"
               style={{ borderColor: theme.border, color: theme.textDim }}
             >
               Cancel
-            </button>
+            </button>}
             <button
               type="submit"
               disabled={isConnecting || isSyncing}

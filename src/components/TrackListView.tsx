@@ -272,7 +272,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                 alt={currentTrack?.title || 'Cover'}
                 className="max-h-[250px] max-w-[270px] object-contain shadow-2xl"
                 style={{
-                  filter: `drop-shadow(0 0 16px rgba(0,0,0,0.95)) contrast(${(asciiConfig?.contrast ?? 0) + 100}%) ${asciiConfig?.inverted ? 'invert(1)' : ''} ${asciiConfig && !asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
+                  filter: `drop-shadow(0 0 16px rgba(0,0,0,0.95)) contrast(${(asciiConfig?.contrast ?? 0) + 100}%) brightness(${100 + (asciiConfig?.brightness ?? 0) * 10}%) ${asciiConfig?.inverted ? 'invert(1)' : ''} ${asciiConfig && !asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
                 }}
               />
             ) : null
