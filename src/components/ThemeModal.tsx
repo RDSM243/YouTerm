@@ -144,7 +144,6 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
                       </span>
                       <span className="flex gap-1.5">{[value.accent, value.highlight, value.text, value.warning].map((color, index) =>
                         <span key={index} className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />)}</span>
-                      <span className="truncate text-[10px] w-full" style={{ color: value.accent }}>{value.promptSymbol} cat album_art.ansi</span>
                     </button>
                     {value.id.startsWith('custom_') && <div className="flex gap-3 px-3 pb-2 text-[10px]" style={{ color: value.textDim }}>
                       <button onClick={() => { setDraft({ ...value }); setStatus(''); }}>Edit</button>

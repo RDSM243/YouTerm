@@ -82,7 +82,8 @@ export type BuiltinThemeId =
   | 'monokai'
   | 'cyberpunk'
   | 'solarized_dark'
-  | 'gruvbox';
+  | 'gruvbox'
+  | 'crimson_moon';
 
 export type ThemeId = BuiltinThemeId | `custom_${string}`;
 
