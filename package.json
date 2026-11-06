@@ -1,0 +1,36 @@
+{
+  "name": "youterm",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "tauri:dev": "cargo run --manifest-path src-tauri/Cargo.toml",
+    "tauri:build": "npm run build && cargo build --release --manifest-path src-tauri/Cargo.toml",
+    "app": "./src-tauri/target/release/youterm",
+    "app:check": "./src-tauri/target/release/youterm --check",
+    "app:smoke": "./src-tauri/target/release/youterm --smoke-test",
+    "package": "bash scripts/package.sh"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-react": "^5.0.4",
+    "lucide-react": "^0.546.0",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "vite": "^6.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "tailwindcss": "^4.1.14",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-linux-x64-gnu": "^4.1.14"
+  },
+  "description": "YouTube Music player for Linux with customizable terminal themes (Tauri v2 + Rust Edition)"
+}

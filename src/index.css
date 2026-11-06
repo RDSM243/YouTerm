@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* Monospace crisp rendering */
+body {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  letter-spacing: -0.01em;
+  background-color: #0c0c0c;
+  color: #d1d1d1;
+}
+
+::selection {
+  background: var(--app-accent, #22c55e);
+  color: #000000;
+}
+
+/* Custom Minimalist Unix Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 0px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--app-accent, #22c55e);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) rgba(0, 0, 0, 0.35);
+}
+
+/* Optional CRT Scanlines Effect */
+.crt-scanlines {
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+    linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+  background-size: 100% 2px, 3px 100%;
+}
+
+[data-density="comfortable"] .track-row {
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+[data-animations="false"] *,
+[data-animations="false"] *::before,
+[data-animations="false"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+[data-glow="false"] * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Authentic Terminal Form Controls (prevents WebKitGTK from rendering light OS comboboxes) */
+select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-color: #141414;
+  color: inherit;
+  border-radius: 0;
+  font-family: inherit;
+}
+
+select option {
+  background-color: #141414 !important;
+  color: #d1d1d1 !important;
+}
+
+select option:checked {
+  background-color: #22c55e !important;
+  color: #000000 !important;
+}
+
+/* Custom terminal range sliders */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.15);
+  height: 4px;
+  border-radius: 0;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--app-accent, #22c55e);
+  cursor: pointer;
+  border: 1px solid #000000;
+}
+
+input[type="text"],
+input[type="search"] {
+  font-family: inherit;
+  border-radius: 0;
+}
