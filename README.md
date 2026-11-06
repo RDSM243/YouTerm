@@ -1,36 +1,38 @@
 <p align="center">
-  <img src="./public/youterm.png" alt="Ícone do YouTerm" width="128" height="128" />
+  <img src="./public/youterm.png" alt="YouTerm icon" width="128" height="128" />
 </p>
 
 <h1 align="center">YouTerm</h1>
 
-<p align="center"><strong>Sua música, do seu jeito.</strong></p>
+<p align="center"><strong>Your music, your way.</strong></p>
 
-O **YouTerm** é um player de música de código aberto para Linux que se conecta ao **YouTube Music**. Ele combina um visual inspirado em terminais com uma interface que você pode personalizar para combinar com o seu estilo.
+**YouTerm** is an open source music player for Linux that connects to **YouTube Music**. It brings the look of a terminal to your music library, with an interface you can customize to match your style.
 
-## Um player com a sua cara
+![YouTerm showing a music library and album artwork with a green terminal theme](./docs/images/youterm.jpeg)
 
-- **Personalize o visual:** escolha entre temas como Tokyo Night, Dracula, Nord e Gruvbox, ou crie o seu próprio tema.
-- **Cuide de cada detalhe:** ajuste cores, fontes, tamanho do texto, espaçamento, animações e efeitos retrô.
-- **Compartilhe seus temas:** importe e exporte suas criações para levar seu estilo com você.
-- **Veja a música acontecer:** alterne entre capas em arte ASCII, listas de faixas e um visualizador de áudio.
-- **Ouça e organize:** busque músicas, gerencie playlists, monte sua fila e conecte sua conta para acessar sua biblioteca do YouTube Music.
-- **Use o teclado:** controle a reprodução e navegue pelo player com atalhos.
+## Make it yours
 
-A interface é feita com **React e CSS**. Como o código é aberto, você também pode modificar o player e criar novas possibilidades de personalização.
+- **Choose your look:** pick a theme such as Tokyo Night, Dracula, Nord or Gruvbox, or create your own.
+- **Fine-tune the details:** customize colors, fonts, text size, spacing, animations and retro effects.
+- **Share your themes:** import and export your creations.
+- **See your music:** switch between album artwork, ASCII art, track lists and an audio visualizer.
+- **Listen and organize:** search for music, manage playlists, build your queue and connect your account to access your YouTube Music library.
+- **Keep your hands on the keyboard:** control playback and navigate the player with shortcuts.
 
-## Baixar
+The interface is built with **React and CSS**. With the source code available, you can also modify the player and take customization further.
 
-O YouTerm está disponível para **Linux (x86_64)** em formato **AppImage**.
+## Download
 
-**[Baixar o YouTerm](https://github.com/RDSM243/YouTerm/releases/latest)**
+YouTerm is available for **Linux (x86_64)** as an **AppImage**.
 
-Baixe o arquivo `.AppImage`, permita sua execução nas propriedades do arquivo e abra o player.
+**[Download YouTerm](https://github.com/RDSM243/YouTerm/releases/latest)**
 
-Versões para **Windows e macOS** estão nos planos para o futuro.
+Download the `.AppImage` file, allow it to run in your file manager's properties and open the player.
 
-## Faça parte
+**Windows and macOS** versions are planned for the future.
 
-Ideias, temas, sugestões e contribuições são bem-vindos. Conte o que você gostaria de ver no player nas [issues](https://github.com/RDSM243/YouTerm/issues) ou envie uma contribuição.
+## Get involved
 
-O YouTerm é distribuído sob a [licença GNU GPLv3](./LICENSE).
+Ideas, themes, feedback and contributions are welcome. Share what you would like to see in the player by [opening an issue](https://github.com/RDSM243/YouTerm/issues) or submitting a contribution.
+
+YouTerm is distributed under the [GNU GPLv3 license](./LICENSE).
