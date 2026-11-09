@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { AsciiConfig, AsciiRenderMode, AsciiResult, Track, ThemeConfig } from '../types';
 import { COVER_MODES } from '../data/settings';
 import { loadCoverArtwork, type CoverArtwork } from '../services/coverArtwork';
-import { Copy, Download, RefreshCw, Check, Image as ImageIcon, Sparkles, ExternalLink, Eye, ChevronDown } from 'lucide-react';
+import { Copy, RefreshCw, Check, Image as ImageIcon, Sparkles, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface AsciiArtViewerProps {
   theme: ThemeConfig;
@@ -12,6 +12,8 @@ interface AsciiArtViewerProps {
   onChangeConfig: (change: Partial<AsciiConfig>) => void;
   onRefresh: () => void;
   isLoading: boolean;
+  showArtworkIcon?: boolean;
+  sidePanel?: React.ReactNode;
 }
 
 export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
@@ -22,9 +24,13 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
   onChangeConfig,
   onRefresh,
   isLoading,
+  showArtworkIcon = true,
+  sidePanel,
 }) => {
   const [copied, setCopied] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const controlsId = useId();
   const [artwork, setArtwork] = useState<(CoverArtwork & { key: string }) | null>(null);
   const [artworkFailed, setArtworkFailed] = useState(false);
   const [artworkRevision, setArtworkRevision] = useState(0);
@@ -32,7 +38,6 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
   const currentArtwork = artwork?.key === artworkKey ? artwork : null;
   const artworkUrl = currentArtwork?.url;
   const needsArtwork = asciiConfig.mode === 'original_hd' || showOriginal;
-  const resolution = currentArtwork ? `${currentArtwork.width} × ${currentArtwork.height}` : 'Loading…';
 
   useEffect(() => {
     if (!needsArtwork || !track?.thumbnailUrl) return;
@@ -68,53 +73,17 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownloadTxt = async () => {
-    if (!track) return;
-    if (asciiConfig.mode === 'original_hd') {
-      if (!artworkUrl || !currentArtwork) return;
-      try {
-        let response: Response;
-        try {
-          response = await fetch(artworkUrl);
-          if (!response.ok) throw new Error('Artwork download failed.');
-        } catch {
-          response = await fetch(`/api/image-proxy?url=${encodeURIComponent(artworkUrl)}`);
-          if (!response.ok) throw new Error('Artwork download failed.');
-        }
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const extension = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
-        a.download = `${track.artist} - ${track.title} [${currentArtwork.width}x${currentArtwork.height}].${extension}`;
-        a.click();
-        URL.revokeObjectURL(url);
-      } catch (err) {
-        window.open(artworkUrl, '_blank', 'noopener,noreferrer');
-      }
-      return;
-    }
-    if (!asciiResult) return;
-    const blob = new Blob([asciiResult.rawText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${track.artist} - ${track.title} [ASCII].txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   if (!track) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-xs font-mono select-none" style={{ color: theme.textDim }}>
-        <p>[ No track selected for ASCII Cover Art conversion ]</p>
-        <p className="mt-2 text-[11px]">Select a song from your library or search to generate its ASCII album cover.</p>
+        <p>[ No song selected ]</p>
+        <p className="mt-2 text-[11px]">Select a song to see its artwork.</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 relative select-none font-mono overflow-hidden">
+    <div role="region" aria-label="Album artwork" className="flex-1 flex flex-col min-h-0 relative select-none font-mono overflow-hidden">
       {/* Top Header */}
       <div
         className="px-4 py-2 border-b flex shrink-0 flex-wrap items-center justify-between gap-2 z-10 text-xs"
@@ -123,14 +92,23 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
           backgroundColor: theme.cardBg,
         }}
       >
-        <div className="flex items-center gap-2 truncate">
-          <span className="font-bold" style={{ color: theme.highlight }}>
-            ┌─ {asciiConfig.mode === 'original_hd' ? 'HD Album Art' : 'ASCII Album Art'}: {track.album || track.title} by {track.artist} ─
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="truncate font-bold" title={`${track.title} — ${track.artist}`} style={{ color: theme.highlight }}>
+            {sidePanel ? '┌─ Album artwork ─' : `${track.title} — ${track.artist}`}
           </span>
+          {!sidePanel && track.album && <span className="truncate text-[11px]" title={track.album} style={{ color: theme.textDim }}>{track.album}</span>}
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center gap-1.5 flex-wrap">
+          <button type="button" aria-label="Display settings" aria-expanded={showControls} aria-controls={controlsId}
+            title={`${showControls ? 'Hide' : 'Show'} display settings`} onClick={() => setShowControls(previous => !previous)}
+            className="flex items-center gap-1 border px-2 py-0.5 text-[11px] hover:brightness-125"
+            style={{ borderColor: theme.border, color: showControls ? theme.accent : theme.textDim, backgroundColor: theme.bg }}>
+            {showControls ? <ChevronDown aria-hidden="true" className="h-3 w-3" /> : <ChevronRight aria-hidden="true" className="h-3 w-3" />}
+            <span>[Display]</span>
+          </button>
+
           {asciiConfig.mode !== 'original_hd' && (
             <button
               onClick={() => setShowOriginal(!showOriginal)}
@@ -168,24 +146,11 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
             </span>
           </button>
 
-          <button
-            onClick={handleDownloadTxt}
-            disabled={asciiConfig.mode === 'original_hd' && !artworkUrl}
-            className="px-2 py-0.5 border text-[11px] flex items-center gap-1 hover:brightness-125"
-            style={{
-              borderColor: theme.border,
-              color: theme.text,
-              backgroundColor: theme.bg,
-            }}
-          >
-            <Download className="w-3 h-3" />
-            <span>{asciiConfig.mode === 'original_hd' ? '[.jpg HD]' : '[.txt]'}</span>
-          </button>
         </div>
       </div>
 
-      <div role="group" aria-label="Cover art controls"
-        className="grid shrink-0 grid-cols-1 gap-3 border-b px-4 py-2 text-xs sm:grid-cols-2 xl:grid-cols-4"
+      <div id={controlsId} role="group" aria-label="Cover art controls" hidden={!showControls}
+        className={`${showControls ? 'grid' : 'hidden'} shrink-0 grid-cols-1 gap-3 border-b px-4 py-2 text-xs sm:grid-cols-2 xl:grid-cols-4`}
         style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-[10px] font-bold tracking-wider" style={{ color: theme.textDim }}>RENDER MODE</span>
@@ -240,177 +205,121 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
         </div>
       </div>
 
-      {/* Main Canvas & Metadata */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-        {/* Left / Center: Display Area */}
-        <div className="flex-1 overflow-auto p-4 flex flex-col items-center justify-center custom-scrollbar bg-black/40">
-          {asciiConfig.mode === 'original_hd' && artworkFailed && !currentArtwork ? (
-            <span className="text-xs" style={{ color: theme.warning }}>[ Could not load this artwork. ]</span>
-          ) : (asciiConfig.mode === 'original_hd' ? !currentArtwork : isLoading) ? (
-            <div className="flex flex-col items-center gap-2" style={{ color: theme.warning }}>
-              <div className="animate-spin text-lg">⚙</div>
-              <span className="text-xs">
-                {asciiConfig.mode === 'original_hd'
-                  ? '[ Loading original artwork... ]'
-                  : '[ Converting album thumbnail to ASCII matrix... ]'}
-              </span>
-            </div>
-          ) : asciiConfig.mode === 'original_hd' ? (
-            /* High-Definition Original Image Canvas */
-            <div
-              className="p-3 border rounded-none max-w-full flex flex-col items-center gap-2.5 shadow-2xl transition-all"
-              style={{
-                borderColor: theme.accent,
-                backgroundColor: '#050708',
-                boxShadow: `0 0 30px ${theme.accentGlow}`,
-              }}
-            >
-              <div className="w-full flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-mono border-b pb-1.5" style={{ borderColor: theme.border }}>
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5" style={{ color: theme.accent }} />
-                  <span className="font-bold uppercase tracking-wider" style={{ color: theme.highlight }}>
-                    ┌─ Original Album Artwork ─┐
-                  </span>
-                </div>
-                <span className="px-1.5 py-0.2 border text-[10px]" style={{ borderColor: theme.border, color: theme.accent }}>
-                  {resolution}
+      {/* Artwork and independently scrolling song details */}
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 min-w-0 overflow-hidden">
+        <div className={`flex min-h-0 min-w-0 flex-1 ${sidePanel ? 'flex-col' : 'flex-col md:flex-row'}`}>
+          {/* Left / Center: Display Area */}
+          <div className="flex-1 min-h-0 min-w-0 overflow-auto p-4 flex flex-col items-center custom-scrollbar bg-black/40">
+            {asciiConfig.mode === 'original_hd' && artworkFailed && !currentArtwork ? (
+              <span className="my-auto text-xs" style={{ color: theme.warning }}>[ Could not load this artwork. ]</span>
+            ) : (asciiConfig.mode === 'original_hd' ? !currentArtwork : isLoading) ? (
+              <div className="my-auto flex flex-col items-center gap-2" style={{ color: theme.warning }}>
+                <div className="animate-spin text-lg">⚙</div>
+                <span className="text-xs">
+                  {asciiConfig.mode === 'original_hd'
+                    ? '[ Loading original artwork... ]'
+                    : '[ Converting album thumbnail to ASCII matrix... ]'}
                 </span>
               </div>
-
-              <div className="relative group overflow-hidden border p-1 bg-black/50 max-w-full" style={{ borderColor: theme.border }}>
-                <img
-                  src={artworkUrl}
-                  alt={track.title}
-                  className="max-h-[65vh] max-w-full object-contain"
-                  style={{
-                    filter: `contrast(${asciiConfig.contrast + 100}%) brightness(${100 + asciiConfig.brightness * 10}%) ${asciiConfig.inverted ? 'invert(1)' : ''} ${!asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
-                    width: `${Math.min(currentArtwork?.width || 800, Math.max(220, asciiConfig.width / 96 * 800))}px`,
-                  }}
-                />
-                <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 p-1 border text-[10px]" style={{ borderColor: theme.border }}>
-                  <a
-                    href={artworkUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:brightness-125 flex items-center gap-1"
-                    style={{ color: theme.highlight }}
-                    title="Open original high-res in new browser tab"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    <span>Fullscreen</span>
-                  </a>
-                </div>
-              </div>
-
-              <div className="w-full flex items-center justify-between gap-2 text-[10px] font-mono pt-1" style={{ color: theme.textDim }}>
-                <span style={{ color: theme.accent }}>[ Original source image ]</span>
-                <span style={{ color: theme.highlight }}>{resolution} px</span>
-                {currentArtwork && currentArtwork.width < 720 && (
-                  <span style={{ color: theme.warning }}>Higher resolution unavailable</span>
-                )}
-              </div>
-            </div>
-          ) : asciiResult && asciiResult.lines.length > 0 ? (
-            <div className="p-2 border rounded-none max-w-full overflow-x-auto" style={{ borderColor: theme.border, backgroundColor: '#050708' }}>
-              <pre
-                className="font-mono text-[9px] sm:text-[10px] md:text-[11px] leading-[9px] sm:leading-[10px] md:leading-[11px] select-all whitespace-pre tracking-normal"
+            ) : asciiConfig.mode === 'original_hd' ? (
+              /* High-Definition Original Image Canvas */
+              <div
+                className="my-auto shrink-0 p-3 border rounded-none max-w-full flex flex-col items-center gap-2.5 shadow-2xl transition-all"
                 style={{
-                  fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                  borderColor: theme.accent,
+                  backgroundColor: '#050708',
+                  boxShadow: `0 0 30px ${theme.accentGlow}`,
                 }}
               >
-                {asciiResult.lines.map((line, lIdx) => (
-                  <div key={lIdx} className="flex">
-                    {line.map((pixel, pIdx) => (
-                      <span
-                        key={pIdx}
-                        style={{
-                          color: pixel.color || theme.accent,
-                          backgroundColor: pixel.bgColor || 'transparent',
-                        }}
-                      >
-                        {pixel.char}
-                      </span>
-                    ))}
+                <div className="w-full flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-mono border-b pb-1.5" style={{ borderColor: theme.border }}>
+                  <div className="flex items-center gap-1.5">
+                    {showArtworkIcon && <Sparkles className="w-3.5 h-3.5" style={{ color: theme.accent }} />}
+                    <span className="font-bold uppercase tracking-wider" style={{ color: theme.highlight }}>
+                      ┌─ Album artwork ─┐
+                    </span>
                   </div>
-                ))}
-              </pre>
+                </div>
+
+                <div className="relative group overflow-hidden border p-1 bg-black/50 max-w-full" style={{ borderColor: theme.border }}>
+                  <img
+                    src={artworkUrl}
+                    alt={track.title}
+                    className="max-h-[65vh] max-w-full object-contain"
+                    style={{
+                      filter: `contrast(${asciiConfig.contrast + 100}%) brightness(${100 + asciiConfig.brightness * 10}%) ${asciiConfig.inverted ? 'invert(1)' : ''} ${!asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
+                      width: `${Math.min(currentArtwork?.width || 800, Math.max(220, asciiConfig.width / 96 * 800))}px`,
+                    }}
+                  />
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 p-1 border text-[10px]" style={{ borderColor: theme.border }}>
+                    <a
+                      href={artworkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:brightness-125 flex items-center gap-1"
+                      style={{ color: theme.highlight }}
+                      title="Open original high-res in new browser tab"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Fullscreen</span>
+                    </a>
+                  </div>
+                </div>
+
+              </div>
+            ) : asciiResult && asciiResult.lines.length > 0 ? (
+              <div className="my-auto shrink-0 p-2 border rounded-none max-w-full overflow-x-auto" style={{ borderColor: theme.border, backgroundColor: '#050708' }}>
+                <pre
+                  className="font-mono text-[9px] sm:text-[10px] md:text-[11px] leading-[9px] sm:leading-[10px] md:leading-[11px] select-all whitespace-pre tracking-normal"
+                  style={{
+                    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                  }}
+                >
+                  {asciiResult.lines.map((line, lIdx) => (
+                    <div key={lIdx} className="flex">
+                      {line.map((pixel, pIdx) => (
+                        <span
+                          key={pIdx}
+                          style={{
+                            color: pixel.color || theme.accent,
+                            backgroundColor: pixel.bgColor || 'transparent',
+                          }}
+                        >
+                          {pixel.char}
+                        </span>
+                      ))}
+                    </div>
+                  ))}
+                </pre>
+              </div>
+            ) : (
+              <span className="my-auto text-xs opacity-60">[ Failed to generate ASCII art ]</span>
+            )}
+          </div>
+
+          {showOriginal && asciiConfig.mode !== 'original_hd' && (
+            <div
+              role="region" aria-label="Original artwork preview"
+              className={`${sidePanel ? 'w-full border-t max-h-48' : 'w-full md:w-72 border-t md:border-t-0 md:border-l'} shrink-0 p-4 text-xs overflow-y-auto`}
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.cardBg,
+              }}
+            >
+              <div className="border p-1" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+                <img src={artworkUrl || track.thumbnailUrl} alt={`Original artwork for ${track.title}`} className="w-full h-40 object-cover" />
+                <div className="text-[9px] text-center mt-1" style={{ color: theme.textDim }}>
+                  {track.album || track.title}
+                </div>
+              </div>
             </div>
-          ) : (
-            <span className="text-xs opacity-60">[ Failed to generate ASCII art ]</span>
           )}
         </div>
 
-        {/* Right Panel: Track Metadata */}
-        {(showOriginal || track) && (
-          <div
-            className="w-full md:w-72 border-t md:border-t-0 md:border-l p-4 flex flex-col gap-3 text-xs overflow-y-auto"
-            style={{
-              borderColor: theme.border,
-              backgroundColor: theme.cardBg,
-            }}
-          >
-            <div className="font-bold border-b pb-1 flex items-center justify-between" style={{ borderColor: theme.border, color: theme.accent }}>
-              <span>┌─ Metadata ─────────┐</span>
-              <span className="text-[10px]" style={{ color: theme.highlight }}>YT-ID: {track.youtubeId.slice(0, 6)}..</span>
-            </div>
-
-            {/* Original Image Preview (only in ASCII mode when showOriginal is active) */}
-            {showOriginal && asciiConfig.mode !== 'original_hd' && (
-              <div className="border p-1" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-                <img
-                  src={artworkUrl || track.thumbnailUrl}
-                  alt={track.title}
-                  className="w-full h-40 object-cover"
-                />
-                <div className="text-[9px] text-center mt-1" style={{ color: theme.textDim }}>
-                  Original artwork {currentArtwork ? `(${resolution})` : ''}
-                </div>
-              </div>
-            )}
-
-            {/* Track Info */}
-            <div className="space-y-1.5 text-xs">
-              <div>
-                <span style={{ color: theme.textDim }}>Title: </span>
-                <span className="font-semibold" style={{ color: theme.highlight }}>{track.title}</span>
-              </div>
-              <div>
-                <span style={{ color: theme.textDim }}>Artist: </span>
-                <span style={{ color: theme.text }}>{track.artist}</span>
-              </div>
-              <div>
-                <span style={{ color: theme.textDim }}>Album: </span>
-                <span style={{ color: theme.text }}>{track.album}</span>
-              </div>
-              {track.year && (
-                <div>
-                  <span style={{ color: theme.textDim }}>Year: </span>
-                  <span style={{ color: theme.text }}>{track.year}</span>
-                </div>
-              )}
-              {track.genre && (
-                <div>
-                  <span style={{ color: theme.textDim }}>Genre: </span>
-                  <span className="px-1 border text-[10px]" style={{ borderColor: theme.border, color: theme.accent }}>{track.genre}</span>
-                </div>
-              )}
-              <div>
-                <span style={{ color: theme.textDim }}>Resolution: </span>
-                <span style={{ color: theme.text }}>
-                  {asciiConfig.mode === 'original_hd'
-                    ? artworkFailed ? 'Unavailable' : `${resolution} px`
-                    : `${asciiResult?.width || 48} x ${asciiResult?.height || 24} cells`}
-                </span>
-              </div>
-              <div>
-                <span style={{ color: theme.textDim }}>Render Mode: </span>
-                <span className="px-1 border text-[10px]" style={{ borderColor: theme.border, color: theme.accent }}>
-                  {COVER_MODES.find((m) => m.id === asciiConfig.mode)?.label || asciiConfig.mode}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        {sidePanel && <aside aria-label="Song details and lyrics"
+          className="flex min-h-0 min-w-0 flex-1 flex-col border-t md:border-t-0 md:border-l"
+          style={{ borderColor: theme.border, backgroundColor: theme.cardBg }}>
+          {sidePanel}
+        </aside>}
       </div>
     </div>
   );

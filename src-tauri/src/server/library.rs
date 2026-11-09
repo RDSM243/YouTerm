@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
@@ -8,11 +8,11 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use url::Url;
 
 use crate::state::AppState;
-use crate::youtube::cipher::extract_session_cookies;
+use crate::youtube::cipher::{extract_session_cookies, is_valid_video_id};
 use crate::youtube::innertube::extract_yt_initial_data;
 use crate::youtube::models::{
     clean_artist_name, clean_track_title, format_duration_sec, parse_iso8601_duration, Playlist,
@@ -34,6 +34,49 @@ pub struct DurationsBody {
 #[derive(Debug, Deserialize)]
 pub struct ApiKeyQuery {
     pub key: Option<String>,
+}
+
+/// Resolve the album from the exact video in YouTube Music's watch queue.
+pub async fn get_track_album(
+    Path(video_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Response {
+    if !is_valid_video_id(&video_id) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "Invalid video ID" })),
+        ).into_response();
+    }
+    if let Some((album, _)) = state.album_cache.read().await
+        .get(&video_id)
+        .filter(|(_, expires)| *expires > Instant::now())
+    {
+        return Json(json!({ "album": album })).into_response();
+    }
+    match state.innertube.fetch_track_album(&video_id).await {
+        Ok(album) => {
+            let mut cache = state.album_cache.write().await;
+            cache.retain(|_, (_, expires)| *expires > Instant::now());
+            if cache.len() >= 128 {
+                if let Some(oldest) = cache.iter()
+                    .min_by_key(|(_, (_, expires))| *expires)
+                    .map(|(id, _)| id.clone())
+                {
+                    cache.remove(&oldest);
+                }
+            }
+            let ttl = if album.is_some() { 6 * 60 * 60 } else { 5 * 60 };
+            cache.insert(
+                video_id,
+                (album.clone(), Instant::now() + Duration::from_secs(ttl)),
+            );
+            Json(json!({ "album": album })).into_response()
+        }
+        Err(()) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": "Could not load song album" })),
+        ).into_response(),
+    }
 }
 
 fn is_non_music_keyword(text: &str) -> bool {
@@ -136,7 +179,7 @@ fn is_music_playlist(item: &Value, tracks: &[Track]) -> bool {
     non_music_count != tracks.len()
 }
 
-fn item_to_track(item: &Value, album: &str, is_liked: Option<bool>) -> Track {
+fn item_to_track(item: &Value, is_liked: Option<bool>) -> Track {
     let snippet = item.get("snippet").unwrap_or(&Value::Null);
     let id = snippet
         .pointer("/resourceId/videoId")
@@ -172,7 +215,8 @@ fn item_to_track(item: &Value, album: &str, is_liked: Option<bool>) -> Track {
         id: id.clone(),
         title: raw_title.to_string(),
         artist: clean_artist_name(raw_artist),
-        album: album.to_string(),
+        album: String::new(),
+        album_id: None,
         thumbnail_url: thumb,
         youtube_id: id,
         duration,
@@ -363,7 +407,7 @@ pub async fn get_user_liked(
             let tracks: Vec<Track> = items
                 .into_iter()
                 .filter(is_music_item)
-                .map(|item| item_to_track(&item, "Liked Songs", Some(true)))
+                .map(|item| item_to_track(&item, Some(true)))
                 .collect();
             Json(json!({ "tracks": tracks })).into_response()
         }
@@ -475,7 +519,7 @@ pub async fn get_user_playlists(
                     .unwrap_or("");
                 has_vid && title != "Private video" && title != "Deleted video"
             })
-            .map(|entry| item_to_track(&entry, pl_title, None))
+            .map(|entry| item_to_track(&entry, None))
             .filter(is_music_track)
             .collect();
 
@@ -630,7 +674,8 @@ pub async fn fetch_playlist(
                                 id: vid.to_string(),
                                 title: clean_track_title(raw_title),
                                 artist: clean_artist_name(raw_artist),
-                                album: pl_title.to_string(),
+                                album: String::new(),
+                                album_id: None,
                                 thumbnail_url: thumb,
                                 youtube_id: vid.to_string(),
                                 duration: 210,
@@ -781,7 +826,8 @@ pub async fn fetch_playlist(
                         id: vid.to_string(),
                         title: clean_track_title(v_title),
                         artist: clean_artist_name(v_artist),
-                        album: title.clone(),
+                        album: String::new(),
+                        album_id: None,
                         thumbnail_url: thumb,
                         youtube_id: vid.to_string(),
                         duration: length_secs,

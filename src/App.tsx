@@ -39,6 +39,7 @@ import {
 import { audioEngine } from './services/youtubeAudioEngine';
 import { syncYouTubeLibrary } from './services/youtubeAccount';
 import { loadCoverArtwork } from './services/coverArtwork';
+import { applyTrackAlbum, loadTrackAlbum, normalizeTrackAlbum } from './services/trackAlbum';
 import { convertImageToAscii } from './utils/asciiConverter';
 import {
   addTrackToPlaylist,
@@ -62,6 +63,7 @@ import { Sidebar } from './components/Sidebar';
 import { TrackListView, formatSeconds } from './components/TrackListView';
 import { AsciiArtViewer } from './components/AsciiArtViewer';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
+import { LyricsView } from './components/LyricsView';
 import { BottomPlayerBar } from './components/BottomPlayerBar';
 import { AuthModal } from './components/AuthModal';
 import { ImportPlaylistModal } from './components/ImportPlaylistModal';
@@ -336,12 +338,57 @@ export default function App() {
     if (playerState.currentTrack || isSearching || displayedTracks.length === 0) return;
     setPlayerState(previous => previous.currentTrack ? previous : {
       ...previous,
-      currentTrack: displayedTracks[0],
+      currentTrack: normalizeTrackAlbum(displayedTracks[0]),
       queue: displayedTracks,
       queueIndex: 0,
       duration: displayedTracks[0].duration || 210,
     });
   }, [displayedTracks, isSearching, playerState.currentTrack]);
+
+  useEffect(() => {
+    const track = playerState.currentTrack;
+    if (!track?.youtubeId || track.albumId) return;
+    const videoId = track.youtubeId;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      void loadTrackAlbum(videoId, controller.signal).then(album => {
+        if (controller.signal.aborted) return;
+        const updateTracks = (tracks: Track[]): Track[] => {
+          const next = tracks.map(item => applyTrackAlbum(item, videoId, album));
+          return next.some((item, index) => item !== tracks[index]) ? next : tracks;
+        };
+        setPlayerState(previous => ({
+          ...previous,
+          currentTrack: previous.currentTrack ? applyTrackAlbum(previous.currentTrack, videoId, album) : null,
+          queue: updateTracks(previous.queue),
+        }));
+        setPlaylists(previous => {
+          const next = previous.map(playlist => {
+            const tracks = updateTracks(playlist.tracks);
+            return tracks === playlist.tracks ? playlist : { ...playlist, tracks };
+          });
+          if (!next.some((playlist, index) => playlist !== previous[index])) return previous;
+          savePlaylists(next);
+          return next;
+        });
+        setHistory(previous => {
+          const next = updateTracks(previous);
+          if (next !== previous) saveHistory(next);
+          return next;
+        });
+        setAccountLikedTracks(previous => {
+          const next = updateTracks(previous);
+          if (next !== previous) saveAccountLikedTracks(next);
+          return next;
+        });
+        setExploreTracks(updateTracks);
+        setSearchResults(updateTracks);
+      }).catch(() => {
+        // Missing album metadata must not interrupt playback.
+      });
+    }, 200);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [playerState.currentTrack?.youtubeId, playerState.currentTrack?.albumId]);
 
   const selectedVideoId = displayedTracks[selectedTrackIndex]?.youtubeId;
   const nextQueueIndex = playerState.queueIndex + 1 < playerState.queue.length
@@ -530,6 +577,7 @@ export default function App() {
       newQueue?: Track[],
       sourceContext?: { playlistId?: string | null; category?: LibraryCategory | null }
     ) => {
+      track = normalizeTrackAlbum(track);
       const queueToUse = newQueue || displayedTracks;
       const idx = queueToUse.findIndex((t) => t.id === track.id || t.youtubeId === track.youtubeId);
 
@@ -823,6 +871,12 @@ export default function App() {
     setPlayerState((prev) => ({ ...prev, volume: bounded, isMuted: false }));
     savePlayerPreferences({ volume: bounded, isMuted: false });
   }, []);
+
+  const handleSeek = useCallback((seconds: number) => {
+    const target = Math.max(0, playerState.duration > 0 ? Math.min(seconds, playerState.duration) : seconds);
+    audioEngine.seekTo(target);
+    setPlayerState(previous => ({ ...previous, currentTime: target }));
+  }, [playerState.duration]);
 
   const handleToggleMute = useCallback(() => {
     setPlayerState((prev) => {
@@ -1454,14 +1508,14 @@ export default function App() {
       <div className="flex-1 flex flex-col w-full h-full max-h-full min-h-0 overflow-hidden">
         {/* Authentic Unix / Linux Mint Terminal Header Bar */}
           <div
-            className="flex items-center justify-between px-3 py-1.5 border-b text-xs select-none"
+            className="flex items-center justify-between gap-3 px-3 py-1.5 border-b text-xs select-none"
             style={{
               borderColor: theme.border,
               backgroundColor: theme.cardBg,
             }}
           >
             {/* Window title */}
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <span className="font-bold text-xs flex items-center gap-1.5" style={{ color: theme.highlight }}>
                 <Terminal className="w-3.5 h-3.5" style={{ color: theme.accent }} />
                 <span>YouTerm v{appVersion}</span>
@@ -1632,9 +1686,9 @@ export default function App() {
             )}
 
             {viewMode === 'split' && (
-              <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+              <section aria-label="Split view" className="flex-1 flex flex-col lg:flex-row min-h-0 min-w-0 overflow-hidden">
                 {/* Left Split: Tracklist */}
-                <div className="flex-1 flex flex-col min-h-0 border-r" style={{ borderColor: theme.border }}>
+                <div className="flex-1 flex flex-col min-h-0 min-w-0 border-b lg:border-b-0 lg:border-r" style={{ borderColor: theme.border }}>
                   <TrackListView
                     theme={theme}
                     onPrepareTrack={appearance.lowPower ? undefined : (track) => audioEngine.prepare(track.youtubeId)}
@@ -1666,9 +1720,10 @@ export default function App() {
                   />
                 </div>
 
-                {/* Right Split: Live ASCII Album Art */}
-                <div className="flex-1 flex flex-col min-h-0">
+                {/* Right Split: Artwork, song information and lyrics */}
+                <div className="flex-[2] lg:flex-[1.5] flex flex-col min-h-0 min-w-0">
                   <AsciiArtViewer
+                    showArtworkIcon={false}
                     theme={theme}
                     track={playerState.currentTrack}
                     asciiResult={asciiResult}
@@ -1678,9 +1733,19 @@ export default function App() {
                       if (playerState.currentTrack) updateAsciiCover(playerState.currentTrack, asciiConfig);
                     }}
                     isLoading={isAsciiLoading}
+                    sidePanel={
+                      <LyricsView
+                        theme={theme}
+                        track={playerState.currentTrack}
+                        currentTime={playerState.currentTime}
+                        duration={playerState.duration}
+                        animations={appearance.animations && !appearance.lowPower}
+                        onSeek={handleSeek}
+                      />
+                    }
                   />
                 </div>
-              </div>
+              </section>
             )}
 
             {viewMode === 'visualizer' && (
@@ -1719,10 +1784,7 @@ export default function App() {
             onCycleRepeat={handleCycleRepeat}
             onToggleMute={handleToggleMute}
             onVolumeChange={handleVolumeChange}
-            onSeek={(seconds) => {
-              audioEngine.seekTo(seconds);
-              setPlayerState((prev) => ({ ...prev, currentTime: seconds }));
-            }}
+            onSeek={handleSeek}
             onToggleLike={() => handleToggleLike()}
             onViewAscii={() => handleSetViewMode('ascii_cover')}
             onToggleFormat={() => audioEngine.toggleFormat()}

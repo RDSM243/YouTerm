@@ -3,6 +3,7 @@ export interface Track {
   title: string;
   artist: string;
   album: string;
+  albumId?: string;
   duration: number; // in seconds
   durationFormatted?: string;
   thumbnailUrl: string;
@@ -67,8 +68,7 @@ export type TuiViewMode =
   | 'tracklist'
   | 'ascii_cover'
   | 'split'
-  | 'visualizer'
-  | 'lyrics';
+  | 'visualizer';
 
 export type AsciiRenderMode =
   | 'half_block'    // ANSI Half-Block (24-bit TrueColor) ▀

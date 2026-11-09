@@ -3,6 +3,7 @@ pub mod auth;
 pub mod explore;
 pub mod fonts;
 pub mod library;
+pub mod lyrics;
 pub mod proxy;
 pub mod search;
 
@@ -40,6 +41,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/search/suggestions", get(search::search_suggestions))
         .route("/api/resolve-track", get(search::resolve_track))
         .route("/api/explore", get(explore::get_explore))
+        .route("/api/lyrics", get(lyrics::get_lyrics))
         .route("/api/audio/:videoId", get(audio::get_audio_metadata))
         .route(
             "/api/audio/:videoId/metadata",
@@ -63,6 +65,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/user/playlists", get(library::get_user_playlists))
         .route("/api/user/liked", get(library::get_user_liked))
         .route("/api/playlist/fetch", get(library::fetch_playlist))
+        .route("/api/tracks/:videoId/album", get(library::get_track_album))
         .route(
             "/api/tracks/durations",
             post(library::get_tracks_durations),

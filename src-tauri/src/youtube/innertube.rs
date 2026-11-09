@@ -7,6 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Mutex, RwLock};
 use url::Url;
 
+use crate::youtube::albums::album_from_runs;
 use crate::youtube::cipher::{
     build_sapisidhash_header, is_media_url, is_valid_video_id, parse_signature_cipher, urlencode,
 };
@@ -94,7 +95,7 @@ impl InnerTubeClient {
     }
 
     /// Ensure we have a valid YouTube InnerTube `visitorData` token in memory
-    async fn ensure_visitor_data(&self) -> Option<String> {
+    pub(super) async fn ensure_visitor_data(&self) -> Option<String> {
         {
             let guard = self.visitor_data.read().await;
             if let Some(ref vd) = *guard {
@@ -240,7 +241,7 @@ impl InnerTubeClient {
             .and_then(|v| v.as_array());
 
         let mut artist = "YouTube Music".to_string();
-        let mut album = "YouTube Music".to_string();
+        let album = album_from_runs(flex.get("flexColumns").unwrap_or(&Value::Null));
         let mut duration_formatted = String::new();
         let mut sec: u32 = 0;
 
@@ -251,26 +252,6 @@ impl InnerTubeClient {
                 .and_then(|t| t.as_str())
             {
                 artist = first.to_string();
-            }
-            if runs.len() >= 3 {
-                if let Some(alb) = runs
-                    .get(2)
-                    .and_then(|r| r.get("text"))
-                    .and_then(|t| t.as_str())
-                {
-                    album = alb.to_string();
-                }
-            }
-        }
-
-        if album == "YouTube Music" {
-            if let Some(alb) = flex
-                .pointer("/flexColumns/2/musicResponsiveListItemFlexColumnRenderer/text/runs/0/text")
-                .and_then(|v| v.as_str())
-            {
-                if !alb.trim().is_empty() {
-                    album = alb.trim().to_string();
-                }
             }
         }
 
@@ -360,11 +341,10 @@ impl InnerTubeClient {
             id: video_id.to_string(),
             title: clean_track_title(&raw_title),
             artist: clean_artist_name(&artist),
-            album: if album.is_empty() {
-                "YouTube Music".to_string()
-            } else {
-                album
-            },
+            album: album.as_ref()
+                .map(|album| album.name.clone())
+                .unwrap_or_default(),
+            album_id: album.map(|album| album.id),
             thumbnail_url: thumb,
             youtube_id: video_id.to_string(),
             duration: final_sec,
@@ -522,7 +502,8 @@ impl InnerTubeClient {
                     id: video_id.to_string(),
                     title: clean_track_title(raw_title),
                     artist: clean_artist_name(raw_artist),
-                    album: "YouTube Music".to_string(),
+                    album: String::new(),
+                    album_id: None,
                     thumbnail_url: thumb,
                     youtube_id: video_id.to_string(),
                     duration: sec,
@@ -1330,7 +1311,6 @@ impl InnerTubeClient {
 
     fn collect_tracks_from_value(
         val: &Value,
-        default_album: &str,
         is_liked: Option<bool>,
         seen: &mut std::collections::HashSet<String>,
         out: &mut Vec<Track>,
@@ -1339,9 +1319,6 @@ impl InnerTubeClient {
             Value::Object(map) => {
                 if map.contains_key("musicResponsiveListItemRenderer") {
                     if let Some(mut track) = Self::parse_innertube_search_item(val) {
-                        if track.album == "YouTube Music" && !default_album.is_empty() {
-                            track.album = default_album.to_string();
-                        }
                         if is_liked.is_some() {
                             track.is_liked = is_liked;
                         }
@@ -1352,7 +1329,7 @@ impl InnerTubeClient {
                     return;
                 }
                 if let Some(video) = map.get("playlistVideoRenderer") {
-                    if let Some(mut track) = Self::parse_playlist_video_renderer(video, default_album)
+                    if let Some(mut track) = Self::parse_playlist_video_renderer(video)
                     {
                         if is_liked.is_some() {
                             track.is_liked = is_liked;
@@ -1364,19 +1341,19 @@ impl InnerTubeClient {
                     return;
                 }
                 for child in map.values() {
-                    Self::collect_tracks_from_value(child, default_album, is_liked, seen, out);
+                    Self::collect_tracks_from_value(child, is_liked, seen, out);
                 }
             }
             Value::Array(arr) => {
                 for item in arr {
-                    Self::collect_tracks_from_value(item, default_album, is_liked, seen, out);
+                    Self::collect_tracks_from_value(item, is_liked, seen, out);
                 }
             }
             _ => {}
         }
     }
 
-    fn parse_playlist_video_renderer(video: &Value, default_album: &str) -> Option<Track> {
+    fn parse_playlist_video_renderer(video: &Value) -> Option<Track> {
         let vid = video.get("videoId").and_then(|v| v.as_str())?;
         if !is_valid_video_id(vid) {
             return None;
@@ -1427,7 +1404,8 @@ impl InnerTubeClient {
             id: vid.to_string(),
             title: clean_track_title(v_title),
             artist: clean_artist_name(v_artist),
-            album: default_album.to_string(),
+            album: String::new(),
+            album_id: None,
             thumbnail_url: thumb,
             youtube_id: vid.to_string(),
             duration: length_secs,
@@ -1457,7 +1435,6 @@ impl InnerTubeClient {
                 logged_in_any = true;
                 Self::collect_tracks_from_value(
                     body,
-                    "Liked Songs",
                     Some(true),
                     &mut seen,
                     &mut tracks,
@@ -1470,7 +1447,6 @@ impl InnerTubeClient {
                 logged_in_any = true;
                 Self::collect_tracks_from_value(
                     body,
-                    "Liked Songs",
                     Some(true),
                     &mut seen,
                     &mut tracks,
@@ -1696,7 +1672,6 @@ impl InnerTubeClient {
                 {
                     Self::collect_tracks_from_value(
                         &body,
-                        &pl_title,
                         None,
                         &mut seen_tracks,
                         &mut tracks,
@@ -1710,7 +1685,6 @@ impl InnerTubeClient {
                     {
                         Self::collect_tracks_from_value(
                             &body,
-                            &pl_title,
                             None,
                             &mut seen_tracks,
                             &mut tracks,

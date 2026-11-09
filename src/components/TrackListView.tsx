@@ -312,25 +312,25 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
           backgroundColor: theme.cardBg,
         }}
       >
-        <div className="flex items-center gap-2 truncate">
-          <span className="font-bold text-xs" style={{ color: theme.highlight }}>
+        <div className="flex min-w-0 flex-1 items-center gap-2 truncate">
+          <span className="truncate font-bold text-xs" title={title} style={{ color: theme.highlight }}>
             ┌─ {title} {subtitle ? `— ${subtitle}` : ''} ─
           </span>
           <span className="text-xs opacity-60 hidden sm:inline">
             ({tracks.length} track{tracks.length === 1 ? '' : 's'} {tracks.length > 0 ? `| #${selectedTrackIndex + 1}` : ''})
           </span>
         </div>
-        <div className="flex items-center gap-2 text-xs flex-shrink-0">
+        <div className="flex min-w-0 max-w-[55%] items-center gap-2 text-xs">
           {dragIndex !== null && draggedTrack ? (
-            <span className="font-bold animate-pulse text-[11px]" style={{ color: theme.accent }}>
+            <span className="truncate font-bold animate-pulse text-[11px]" style={{ color: theme.accent }}>
               [ ⠿ Moving: "{draggedTrack.title}" → Release at #{targetIndex !== null ? targetIndex + 1 : dragIndex + 1} | Esc: Cancel ]
             </span>
           ) : isReorderable ? (
-            <span style={{ color: theme.textDim }} className="text-[11px]">
+            <span style={{ color: theme.textDim }} className="truncate text-[11px]" title="Drag with click to reorder | Enter: Play | Space: Pause | L: Like">
               [Drag with click to reorder | Enter: Play | Space: Pause | L: Like]
             </span>
           ) : (
-            <span style={{ color: theme.textDim }} className="text-[11px]">
+            <span style={{ color: theme.textDim }} className="truncate text-[11px]" title="j/k: Scroll & Select | Enter: Play | Space: Pause | L: Like">
               [j/k: Scroll & Select | Enter: Play | Space: Pause | L: Like]
             </span>
           )}
@@ -519,8 +519,8 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                 </div>
 
                 {/* Duration & Quick Hover Actions */}
-                <div className="col-span-2 text-right flex items-center justify-end gap-1 relative z-20">
-                  <span className="text-[11px]" style={{ color: isDropTarget ? theme.accent : isCurrent ? theme.highlight : theme.textDim }}>
+                <div className="col-span-2 min-w-0 text-right flex items-center justify-end relative z-20">
+                  <span className="text-[11px] group-hover:opacity-0 group-focus-within:opacity-0" style={{ color: isDropTarget ? theme.accent : isCurrent ? theme.highlight : theme.textDim }}>
                     {track.duration && track.duration !== 210
                       ? formatSeconds(track.duration)
                       : track.durationFormatted && track.durationFormatted !== '3:30'
@@ -531,7 +531,8 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                   </span>
 
                   {/* Hover Buttons */}
-                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-1 transition-opacity">
+                  <div className="absolute inset-y-0 right-0 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto flex items-center gap-1 transition-opacity"
+                    style={{ backgroundColor: theme.bg }}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
