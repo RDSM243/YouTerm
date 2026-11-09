@@ -262,8 +262,9 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
       {/* Background Cover Art Watermark (follows the render mode indicated on the cover screen) */}
       {showBackgroundAscii && (
         <div
+          data-album-watermark="" aria-hidden="true"
           className="absolute inset-0 pointer-events-none overflow-hidden opacity-30 flex items-center justify-end pr-8"
-          style={{ zIndex: 15 }}
+          style={{ zIndex: 0 }}
         >
           {asciiConfig?.mode === 'original_hd' ? (
             (coverArtworkUrl || currentTrack?.thumbnailUrl) ? (
@@ -309,7 +310,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
         className="px-4 py-2 border-b flex items-center justify-between z-20 relative"
         style={{
           borderColor: theme.border,
-          backgroundColor: theme.cardBg,
+          backgroundColor: 'var(--app-surface-card-bg)',
         }}
       >
         <div className="flex min-w-0 flex-1 items-center gap-2 truncate">
@@ -343,7 +344,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
         style={{
           borderColor: theme.border,
           color: theme.textDim,
-          backgroundColor: theme.bg,
+          backgroundColor: 'var(--app-surface-bg)',
         }}
       >
         <div className="col-span-1 text-center">#</div>
@@ -430,7 +431,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                     : isSelected
                     ? `${theme.highlight}22`
                     : isOriginDuringDrag
-                    ? `${theme.cardBg}`
+                    ? 'var(--app-surface-card-bg)'
                     : 'transparent',
                   color: isDropTarget ? theme.highlight : isCurrent ? theme.highlight : theme.text,
                   boxShadow: isDropTarget ? `0 0 16px ${theme.accentGlow || 'rgba(34, 197, 94, 0.4)'}` : undefined,
@@ -496,7 +497,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                       className="text-[9px] px-1.5 py-0.5 border uppercase tracking-wider font-bold animate-pulse flex-shrink-0"
                       style={{
                         borderColor: theme.accent,
-                        backgroundColor: theme.bg,
+                        backgroundColor: 'var(--app-surface-bg)',
                         color: theme.accent,
                       }}
                     >
@@ -532,7 +533,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
 
                   {/* Hover Buttons */}
                   <div className="absolute inset-y-0 right-0 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto flex items-center gap-1 transition-opacity"
-                    style={{ backgroundColor: theme.bg }}>
+                    style={{ backgroundColor: 'var(--app-surface-bg)' }}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -572,7 +573,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
           style={{
             left: `${cursorPos.x + 14}px`,
             top: `${cursorPos.y + 14}px`,
-            backgroundColor: theme.cardBg,
+            backgroundColor: 'var(--app-surface-card-bg)',
             borderColor: theme.accent,
             color: theme.highlight,
             boxShadow: `0 0 20px ${theme.accentGlow || 'rgba(34, 197, 94, 0.45)'}`,
@@ -581,7 +582,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
           <GripVertical className="w-3.5 h-3.5 flex-shrink-0" style={{ color: theme.accent }} />
           <span
             className="font-bold px-1.5 py-0.5 border text-[10px]"
-            style={{ borderColor: theme.border, color: theme.accent, backgroundColor: theme.bg }}
+            style={{ borderColor: theme.border, color: theme.accent, backgroundColor: 'var(--app-surface-bg)' }}
           >
             #{targetIndex !== null ? targetIndex + 1 : dragIndex + 1}
           </span>

@@ -1,5 +1,6 @@
 pub mod audio;
 pub mod auth;
+pub mod background;
 pub mod explore;
 pub mod fonts;
 pub mod library;
@@ -8,7 +9,7 @@ pub mod proxy;
 pub mod search;
 
 use axum::{
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, options, post},
@@ -37,6 +38,13 @@ pub fn build_router(state: Arc<AppState>) -> Router {
 
     Router::new()
         .route("/api/health", get(health_check))
+        .route(
+            "/api/background/image",
+            get(background::get_image)
+                .put(background::put_image)
+                .delete(background::delete_image)
+                .layer(DefaultBodyLimit::max(background::MAX_IMAGE_BYTES)),
+        )
         .route("/api/search", get(search::search_tracks))
         .route("/api/search/suggestions", get(search::search_suggestions))
         .route("/api/resolve-track", get(search::resolve_track))

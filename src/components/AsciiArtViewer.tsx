@@ -89,7 +89,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
         className="px-4 py-2 border-b flex shrink-0 flex-wrap items-center justify-between gap-2 z-10 text-xs"
         style={{
           borderColor: theme.border,
-          backgroundColor: theme.cardBg,
+          backgroundColor: 'var(--app-surface-card-bg)',
         }}
       >
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -104,7 +104,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
           <button type="button" aria-label="Display settings" aria-expanded={showControls} aria-controls={controlsId}
             title={`${showControls ? 'Hide' : 'Show'} display settings`} onClick={() => setShowControls(previous => !previous)}
             className="flex items-center gap-1 border px-2 py-0.5 text-[11px] hover:brightness-125"
-            style={{ borderColor: theme.border, color: showControls ? theme.accent : theme.textDim, backgroundColor: theme.bg }}>
+            style={{ borderColor: theme.border, color: showControls ? theme.accent : theme.textDim, backgroundColor: 'var(--app-surface-bg)' }}>
             {showControls ? <ChevronDown aria-hidden="true" className="h-3 w-3" /> : <ChevronRight aria-hidden="true" className="h-3 w-3" />}
             <span>[Display]</span>
           </button>
@@ -131,7 +131,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
             style={{
               borderColor: theme.accent,
               color: theme.accent,
-              backgroundColor: theme.bg,
+              backgroundColor: 'var(--app-surface-bg)',
             }}
           >
             {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
@@ -151,15 +151,15 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
 
       <div id={controlsId} role="group" aria-label="Cover art controls" hidden={!showControls}
         className={`${showControls ? 'grid' : 'hidden'} shrink-0 grid-cols-1 gap-3 border-b px-4 py-2 text-xs sm:grid-cols-2 xl:grid-cols-4`}
-        style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+        style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-[10px] font-bold tracking-wider" style={{ color: theme.textDim }}>RENDER MODE</span>
           <span className="relative flex items-center">
             <select aria-label="Cover render mode" value={asciiConfig.mode}
               onChange={event => onChangeConfig({ mode: event.target.value as AsciiRenderMode })}
               className="w-full min-w-0 border px-2.5 py-1 pr-7 text-xs outline-none cursor-pointer font-mono"
-              style={{ borderColor: theme.border, color: theme.highlight, backgroundColor: theme.cardBg }}>
-              {COVER_MODES.map(mode => <option key={mode.id} value={mode.id} style={{ backgroundColor: theme.bg, color: theme.text }}>{mode.label}</option>)}
+              style={{ borderColor: theme.border, color: theme.highlight, backgroundColor: 'var(--app-surface-card-bg)' }}>
+              {COVER_MODES.map(mode => <option key={mode.id} value={mode.id} style={{ backgroundColor: 'var(--app-surface-bg)', color: theme.text }}>{mode.label}</option>)}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5" style={{ color: theme.accent }} />
           </span>
@@ -209,7 +209,8 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
       <div className="flex-1 flex flex-col md:flex-row min-h-0 min-w-0 overflow-hidden">
         <div className={`flex min-h-0 min-w-0 flex-1 ${sidePanel ? 'flex-col' : 'flex-col md:flex-row'}`}>
           {/* Left / Center: Display Area */}
-          <div className="flex-1 min-h-0 min-w-0 overflow-auto p-4 flex flex-col items-center custom-scrollbar bg-black/40">
+          <div data-background-region="artwork" className="flex-1 min-h-0 min-w-0 overflow-auto p-4 flex flex-col items-center custom-scrollbar"
+            style={{ backgroundColor: 'transparent' }}>
             {asciiConfig.mode === 'original_hd' && artworkFailed && !currentArtwork ? (
               <span className="my-auto text-xs" style={{ color: theme.warning }}>[ Could not load this artwork. ]</span>
             ) : (asciiConfig.mode === 'original_hd' ? !currentArtwork : isLoading) ? (
@@ -227,7 +228,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
                 className="my-auto shrink-0 p-3 border rounded-none max-w-full flex flex-col items-center gap-2.5 shadow-2xl transition-all"
                 style={{
                   borderColor: theme.accent,
-                  backgroundColor: '#050708',
+                  backgroundColor: 'var(--app-surface-bg)',
                   boxShadow: `0 0 30px ${theme.accentGlow}`,
                 }}
               >
@@ -240,7 +241,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
                   </div>
                 </div>
 
-                <div className="relative group overflow-hidden border p-1 bg-black/50 max-w-full" style={{ borderColor: theme.border }}>
+                <div className="relative group overflow-hidden border p-1 max-w-full" style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
                   <img
                     src={artworkUrl}
                     alt={track.title}
@@ -267,7 +268,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
 
               </div>
             ) : asciiResult && asciiResult.lines.length > 0 ? (
-              <div className="my-auto shrink-0 p-2 border rounded-none max-w-full overflow-x-auto" style={{ borderColor: theme.border, backgroundColor: '#050708' }}>
+              <div className="my-auto shrink-0 p-2 border rounded-none max-w-full overflow-x-auto" style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
                 <pre
                   className="font-mono text-[9px] sm:text-[10px] md:text-[11px] leading-[9px] sm:leading-[10px] md:leading-[11px] select-all whitespace-pre tracking-normal"
                   style={{
@@ -302,10 +303,10 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
               className={`${sidePanel ? 'w-full border-t max-h-48' : 'w-full md:w-72 border-t md:border-t-0 md:border-l'} shrink-0 p-4 text-xs overflow-y-auto`}
               style={{
                 borderColor: theme.border,
-                backgroundColor: theme.cardBg,
+                backgroundColor: 'var(--app-surface-card-bg)',
               }}
             >
-              <div className="border p-1" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+              <div className="border p-1" style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
                 <img src={artworkUrl || track.thumbnailUrl} alt={`Original artwork for ${track.title}`} className="w-full h-40 object-cover" />
                 <div className="text-[9px] text-center mt-1" style={{ color: theme.textDim }}>
                   {track.album || track.title}
@@ -317,7 +318,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
 
         {sidePanel && <aside aria-label="Song details and lyrics"
           className="flex min-h-0 min-w-0 flex-1 flex-col border-t md:border-t-0 md:border-l"
-          style={{ borderColor: theme.border, backgroundColor: theme.cardBg }}>
+          style={{ borderColor: theme.border, backgroundColor: 'transparent' }}>
           {sidePanel}
         </aside>}
       </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { ThemeConfig, Track } from '../types';
 import { audioEngine } from '../services/youtubeAudioEngine';
 import { loadPlayerPreferences, savePlayerPreferences } from '../services/libraryStorage';
+import { surfaceColor } from '../services/background';
 import { Activity, Waves, Cpu, BarChart2 } from 'lucide-react';
 
 interface SpectrumVisualizerProps {
@@ -9,6 +10,7 @@ interface SpectrumVisualizerProps {
   isPlaying: boolean;
   currentTrack: Track | null;
   maxFrameRate?: number;
+  showBackground?: boolean;
 }
 
 type VisualizerMode = 'bars' | 'wave' | 'matrix';
@@ -54,7 +56,9 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
   isPlaying,
   currentTrack,
   maxFrameRate = 60,
+  showBackground = false,
 }) => {
+  const surfaceOpacity = showBackground ? 0 : 1;
   const [mode, setMode] = useState<VisualizerMode>(() => loadPlayerPreferences().spectrumMode);
   const [fps, setFps] = useState<number>(60);
   const [rmsDb, setRmsDb] = useState<number>(-96);
@@ -144,8 +148,9 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
       const width = displayWidth;
       const height = displayHeight;
 
-      // Clear Canvas with authentic terminal CRT dark background
-      ctx.fillStyle = theme.bg;
+      // Clear before applying translucency so successive frames do not darken it.
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = surfaceColor(theme.bg, surfaceOpacity);
       ctx.fillRect(0, 0, width, height);
 
       // Fetch Real Web Audio Analyser
@@ -592,7 +597,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
         ctx.strokeStyle = theme.border;
         ctx.strokeRect(leftMargin + plotWidth / 2 - 190, topMargin + plotHeight / 2 - 24, 380, 48);
 
-        ctx.fillStyle = theme.bg;
+        ctx.fillStyle = surfaceColor(theme.bg, surfaceOpacity);
         ctx.fillRect(leftMargin + plotWidth / 2 - 189, topMargin + plotHeight / 2 - 23, 378, 46);
 
         ctx.fillStyle = isPlaying ? theme.warning : theme.highlight;
@@ -619,7 +624,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
       running = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [mode, isPlaying, theme, sensitivity, maxFrameRate]);
+  }, [mode, isPlaying, theme, sensitivity, maxFrameRate, surfaceOpacity]);
 
   // Stereo VU bar percentage calculation
   const rmsNorm = Math.max(0, Math.min(100, Math.round(((rmsDb + 60) / 60) * 100)));
@@ -628,15 +633,17 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
   return (
     <div
       ref={containerRef}
+      data-background-region="spectrum" data-background-enabled={showBackground}
       className="flex-1 flex flex-col min-h-0 relative select-none font-mono overflow-hidden text-xs w-full h-full"
-      style={{ backgroundColor: theme.bg }}
+      style={{ backgroundColor: showBackground ? 'transparent' : theme.bg,
+        ...(!showBackground ? { '--app-surface-bg': theme.bg, '--app-surface-card-bg': theme.cardBg } : {}) } as React.CSSProperties}
     >
       {/* Top Header Bar */}
       <div
         className="px-3 py-2 border-b flex items-center justify-between z-10 flex-wrap gap-2"
         style={{
           borderColor: theme.border,
-          backgroundColor: theme.cardBg,
+          backgroundColor: 'var(--app-surface-card-bg)',
         }}
       >
         <div className="flex items-center gap-2 truncate">
@@ -676,7 +683,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
             style={{
               borderColor: sensitivity === 0 ? theme.accent : theme.border,
               color: sensitivity === 0 ? theme.highlight : theme.textDim,
-              backgroundColor: sensitivity === 0 ? 'rgba(0, 240, 255, 0.08)' : theme.bg,
+              backgroundColor: sensitivity === 0 ? 'rgba(0, 240, 255, 0.08)' : 'var(--app-surface-bg)',
             }}
           >
             Gain: {sensitivity === 0 ? `AUTO (${liveAutoGain.toFixed(1)}x)` : `${sensitivity.toFixed(1)}x`}
@@ -688,7 +695,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
               className="px-2.5 py-0.5 border uppercase font-bold hover:brightness-125 transition-all flex items-center gap-1"
               style={{ borderColor: mode === value ? theme.accent : theme.border,
                 color: mode === value ? theme.highlight : theme.textDim,
-                backgroundColor: mode === value ? 'rgba(255,255,255,0.08)' : theme.bg }}>
+                backgroundColor: mode === value ? 'rgba(255,255,255,0.08)' : 'var(--app-surface-bg)' }}>
               {value === 'bars' && <BarChart2 className="w-3 h-3" />}
               {value === 'wave' && <Waves className="w-3 h-3" />}
               {value === 'matrix' && <Cpu className="w-3 h-3" />}
@@ -702,7 +709,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
       <div className="flex-1 min-h-0 w-full relative overflow-hidden flex flex-col p-2 sm:p-3">
         <div
           className="flex-1 w-full h-full min-h-0 border relative flex flex-col shadow-inner overflow-hidden"
-          style={{ borderColor: theme.border, backgroundColor: '#040608' }}
+          style={{ borderColor: theme.border, backgroundColor: surfaceOpacity < 1 ? 'transparent' : '#040608' }}
         >
           <canvas
             ref={canvasRef}
@@ -717,7 +724,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
         className="px-3 py-2 border-t flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px]"
         style={{
           borderColor: theme.border,
-          backgroundColor: theme.cardBg,
+          backgroundColor: 'var(--app-surface-card-bg)',
         }}
       >
         {/* Left: Stereo VU Meters */}

@@ -1,5 +1,6 @@
 import { DEFAULT_THEME_ID, THEMES } from '../data/themes';
 import type { AppearanceConfig, ThemeConfig, ThemeId } from '../types';
+import { DEFAULT_BACKGROUND, normalizeBackground } from './background';
 
 const CUSTOM_THEMES_KEY = 'youterm_custom_themes_v1';
 const APPEARANCE_KEY = 'youterm_appearance_v1';
@@ -27,7 +28,8 @@ export function getFontFamily(font: string): string {
 
 export const DEFAULT_APPEARANCE: AppearanceConfig = {
   font: 'system', fontSize: 12, density: 'compact', animations: true,
-  glow: true, scanlines: false, lowPower: true,
+  glow: true, scanlines: false, lowPower: true, hideAlbumCover: false,
+  background: { ...DEFAULT_BACKGROUND },
 };
 
 export function accentGlow(accent: string): string {
@@ -108,9 +110,10 @@ export function normalizeAppearance(value: unknown): AppearanceConfig {
   }
   if (Number.isFinite(input.fontSize)) result.fontSize = Math.max(10, Math.min(18, Math.round(input.fontSize!)));
   if (input.density === 'comfortable' || input.density === 'compact') result.density = input.density;
-  for (const field of ['animations', 'glow', 'scanlines', 'lowPower'] as const) {
+  for (const field of ['animations', 'glow', 'scanlines', 'lowPower', 'hideAlbumCover'] as const) {
     if (typeof input[field] === 'boolean') result[field] = input[field];
   }
+  result.background = normalizeBackground(input.background);
   return result;
 }
 

@@ -4,6 +4,7 @@ import { Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Volume2, VolumeX, 
 
 interface BottomPlayerBarProps {
   theme: ThemeConfig;
+  showBackground?: boolean;
   playerState: PlayerState;
   onTogglePlay: () => void;
   onNext: () => void;
@@ -20,6 +21,7 @@ interface BottomPlayerBarProps {
 
 export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
   theme,
+  showBackground = false,
   playerState,
   onTogglePlay,
   onNext,
@@ -179,11 +181,13 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
 
   return (
     <footer
+      data-background-region="player" data-background-enabled={showBackground}
       className="border-t select-none font-mono text-xs z-20 flex flex-col"
       style={{
         borderColor: theme.border,
-        backgroundColor: theme.bg,
-      }}
+        backgroundColor: showBackground ? 'transparent' : theme.bg,
+        ...(!showBackground ? { '--app-surface-bg': theme.bg, '--app-surface-card-bg': theme.cardBg } : {}),
+      } as React.CSSProperties}
     >
 
       {/* Main Player Row */}
@@ -260,7 +264,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
               title="Play/Pause [Space]"
               style={{
                 borderColor: theme.accent,
-                backgroundColor: theme.cardBg,
+                backgroundColor: 'var(--app-surface-card-bg)',
                 color: theme.highlight,
               }}
             >

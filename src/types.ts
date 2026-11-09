@@ -93,6 +93,18 @@ export type BuiltinThemeId =
 
 export type ThemeId = BuiltinThemeId | `custom_${string}`;
 
+export interface BackgroundConfig {
+  enabled: boolean;
+  imageRevision: string;
+  imageName: string;
+  brightness: number;
+  darkness: number;
+  panelOpacity: number;
+  showInSidebar: boolean;
+  showInPlayer: boolean;
+  showInSpectrum: boolean;
+}
+
 export interface AppearanceConfig {
   font: string;
   fontSize: number;
@@ -101,6 +113,8 @@ export interface AppearanceConfig {
   glow: boolean;
   scanlines: boolean;
   lowPower: boolean;
+  hideAlbumCover: boolean;
+  background: BackgroundConfig;
 }
 
 export interface ThemeConfig {

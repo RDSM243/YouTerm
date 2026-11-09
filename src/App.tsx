@@ -3,6 +3,7 @@ import { version as appVersion } from '../package.json';
 import {
   Album,
   AppearanceConfig,
+  BackgroundConfig,
   AsciiConfig,
   AsciiResult,
   LibraryCategory,
@@ -40,6 +41,7 @@ import { audioEngine } from './services/youtubeAudioEngine';
 import { syncYouTubeLibrary } from './services/youtubeAccount';
 import { loadCoverArtwork } from './services/coverArtwork';
 import { applyTrackAlbum, loadTrackAlbum, normalizeTrackAlbum } from './services/trackAlbum';
+import { normalizeBackground, surfaceColor } from './services/background';
 import { convertImageToAscii } from './utils/asciiConverter';
 import {
   addTrackToPlaylist,
@@ -59,6 +61,7 @@ import { openExternal } from './services/desktop';
 import { getVisibleLibraryCategories, loadSidebarPreferences, normalizeSidebarPreferences, resolveSidebarSelection, saveSidebarPreferences } from './services/sidebarStorage';
 
 import { TopSearchBar } from './components/TopSearchBar';
+import { BackgroundLayer } from './components/BackgroundLayer';
 import { Sidebar } from './components/Sidebar';
 import { TrackListView, formatSeconds } from './components/TrackListView';
 import { AsciiArtViewer } from './components/AsciiArtViewer';
@@ -83,6 +86,24 @@ export default function App() {
   const [themeId, setThemeId] = useState<ThemeId>(loadThemeId);
   const [customThemes, setCustomThemes] = useState<ThemeConfig[]>(loadCustomThemes);
   const [appearance, setAppearance] = useState<AppearanceConfig>(loadAppearance);
+  const appearanceRef = useRef(appearance);
+  appearanceRef.current = appearance;
+  const handleChangeAppearance = useCallback((value: AppearanceConfig) => {
+    saveAppearance(value);
+    appearanceRef.current = value;
+    setAppearance(value);
+  }, []);
+  const handleChangeBackground = useCallback((change: Partial<BackgroundConfig>) => {
+    const previous = appearanceRef.current;
+    handleChangeAppearance({ ...previous, background: normalizeBackground({ ...previous.background, ...change }) });
+  }, [handleChangeAppearance]);
+  const [loadedBackground, setLoadedBackground] = useState('');
+  const handleBackgroundReady = useCallback((revision: string, ready: boolean) => {
+    setLoadedBackground(previous => ready ? revision : previous === revision ? '' : previous);
+  }, []);
+  const backgroundVisible = appearance.background.enabled && !!appearance.background.imageRevision
+    && loadedBackground === appearance.background.imageRevision;
+  const surfaceOpacity = backgroundVisible ? appearance.background.panelOpacity / 100 : 1;
   const availableThemes = React.useMemo(() => [...Object.values(THEMES), ...customThemes], [customThemes]);
   const selectedTheme = resolveTheme(themeId, customThemes);
   const theme = React.useMemo(() => appearance.glow ? selectedTheme : { ...selectedTheme, accentGlow: 'transparent' }, [selectedTheme, appearance.glow]);
@@ -1498,20 +1519,24 @@ export default function App() {
       data-density={appearance.density}
       data-animations={appearance.animations}
       data-glow={appearance.glow}
-      className={`h-screen max-h-screen w-screen flex flex-col font-mono select-none overflow-hidden ${scanlinesEnabled ? 'crt-scanlines' : ''}`}
+      className="relative isolate h-screen max-h-screen w-screen flex flex-col font-mono select-none overflow-hidden"
       style={{
         backgroundColor: theme.bg,
         color: theme.text,
-      }}
+        '--app-surface-bg': surfaceColor(theme.bg, surfaceOpacity),
+        '--app-surface-card-bg': surfaceColor(theme.cardBg, surfaceOpacity),
+      } as React.CSSProperties}
     >
+      <BackgroundLayer config={appearance.background} onReady={handleBackgroundReady} />
+      {scanlinesEnabled && <div aria-hidden="true" className="crt-scanlines pointer-events-none absolute inset-0 z-[1]" />}
       {/* Terminal Window Content */}
-      <div className="flex-1 flex flex-col w-full h-full max-h-full min-h-0 overflow-hidden">
+      <div className="relative z-10 flex-1 flex flex-col w-full h-full max-h-full min-h-0 overflow-hidden">
         {/* Authentic Unix / Linux Mint Terminal Header Bar */}
           <div
             className="flex items-center justify-between gap-3 px-3 py-1.5 border-b text-xs select-none"
             style={{
               borderColor: theme.border,
-              backgroundColor: theme.cardBg,
+              backgroundColor: 'var(--app-surface-card-bg)',
             }}
           >
             {/* Window title */}
@@ -1529,7 +1554,7 @@ export default function App() {
                 className="px-2 py-0.5 border flex items-center gap-1 transition-all"
                 style={{
                   borderColor: viewMode === 'tracklist' ? theme.accent : theme.border,
-                  backgroundColor: viewMode === 'tracklist' ? theme.bg : 'transparent',
+                  backgroundColor: viewMode === 'tracklist' ? 'var(--app-surface-bg)' : 'transparent',
                   color: viewMode === 'tracklist' ? theme.highlight : theme.textDim,
                 }}
               >
@@ -1542,7 +1567,7 @@ export default function App() {
                 className="px-2 py-0.5 border flex items-center gap-1 transition-all"
                 style={{
                   borderColor: viewMode === 'ascii_cover' ? theme.accent : theme.border,
-                  backgroundColor: viewMode === 'ascii_cover' ? theme.bg : 'transparent',
+                  backgroundColor: viewMode === 'ascii_cover' ? 'var(--app-surface-bg)' : 'transparent',
                   color: viewMode === 'ascii_cover' ? theme.highlight : theme.textDim,
                 }}
               >
@@ -1555,7 +1580,7 @@ export default function App() {
                 className="px-2 py-0.5 border flex items-center gap-1 transition-all"
                 style={{
                   borderColor: viewMode === 'split' ? theme.accent : theme.border,
-                  backgroundColor: viewMode === 'split' ? theme.bg : 'transparent',
+                  backgroundColor: viewMode === 'split' ? 'var(--app-surface-bg)' : 'transparent',
                   color: viewMode === 'split' ? theme.highlight : theme.textDim,
                 }}
               >
@@ -1568,7 +1593,7 @@ export default function App() {
                 className="px-2 py-0.5 border flex items-center gap-1 transition-all"
                 style={{
                   borderColor: viewMode === 'visualizer' ? theme.accent : theme.border,
-                  backgroundColor: viewMode === 'visualizer' ? theme.bg : 'transparent',
+                  backgroundColor: viewMode === 'visualizer' ? 'var(--app-surface-bg)' : 'transparent',
                   color: viewMode === 'visualizer' ? theme.highlight : theme.textDim,
                 }}
               >
@@ -1600,6 +1625,7 @@ export default function App() {
             {/* Left Sidebar: Library & Playlists */}
             <Sidebar
               theme={theme}
+              showBackground={backgroundVisible && appearance.background.showInSidebar}
               preferences={sidebarPreferences}
               onChangePreferences={handleChangeSidebarPreferences}
               activeCategory={activeCategory}
@@ -1657,7 +1683,7 @@ export default function App() {
                 }}
                 onContextMenu={handleTrackListContextMenu}
                 backgroundAscii={backgroundAscii}
-                showBackgroundAscii={true}
+                showBackgroundAscii={!appearance.hideAlbumCover}
                 asciiConfig={asciiConfig}
                 coverArtworkUrl={coverArtworkUrl}
                 isReorderable={!isSearching && !!selectedPlaylist && isEditablePlaylist(selectedPlaylist)}
@@ -1751,6 +1777,7 @@ export default function App() {
             {viewMode === 'visualizer' && (
               <SpectrumVisualizer
                 maxFrameRate={appearance.lowPower ? 15 : 60}
+                showBackground={backgroundVisible && appearance.background.showInSpectrum}
                 theme={theme}
                 isPlaying={playerState.isPlaying}
                 currentTrack={playerState.currentTrack}
@@ -1776,6 +1803,7 @@ export default function App() {
           {/* Bottom Player Bar */}
           <BottomPlayerBar
             theme={theme}
+            showBackground={backgroundVisible && appearance.background.showInPlayer}
             playerState={playerState}
             onTogglePlay={handleTogglePlay}
             onNext={handleNextTrack}
@@ -1796,7 +1824,7 @@ export default function App() {
         <div
           role="status"
           className="fixed bottom-20 left-1/2 -translate-x-1/2 px-3 py-1.5 text-xs font-mono border shadow-2xl max-w-[80vw] truncate pointer-events-none"
-          style={{ zIndex: 90, backgroundColor: theme.cardBg, borderColor: theme.accent, color: theme.highlight, boxShadow: `0 0 14px ${theme.accentGlow}` }}
+          style={{ zIndex: 90, backgroundColor: 'var(--app-surface-card-bg)', borderColor: theme.accent, color: theme.highlight, boxShadow: `0 0 14px ${theme.accentGlow}` }}
         >
           <span style={{ color: theme.accent }}>$ </span>
           {toast}
@@ -1845,7 +1873,8 @@ export default function App() {
           onSaveSession={newSession => { setSession(newSession); saveUserSession(newSession); }}
           onSyncAccount={handleSyncAccount}
           onDisconnect={() => { setSession(defaultSession); saveUserSession(defaultSession); }}
-          onChangeAppearance={(value) => { saveAppearance(value); setAppearance(value); }}
+          onChangeAppearance={handleChangeAppearance}
+          onChangeBackground={handleChangeBackground}
           onSaveCustomTheme={(value) => {
             const next = [...customThemes.filter(theme => theme.id !== value.id), value];
             saveCustomThemes(next);

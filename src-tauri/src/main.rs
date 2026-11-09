@@ -343,7 +343,7 @@ fn main() {
     }
 
     let (std_listener, bound_port) = bind_local_listener(opts.port);
-    let app_state = AppState::new(bound_port, static_dir, opts.smoke_test);
+    let app_state = AppState::new(bound_port, static_dir, config_dir.clone(), opts.smoke_test);
 
     if opts.server_only {
         let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");

@@ -80,7 +80,7 @@ export const LyricsView: React.FC<LyricsViewProps> = ({ theme, track, currentTim
       </dl>}
 
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-[11px]"
-        style={{ borderColor: theme.border, backgroundColor: theme.cardBg }}>
+        style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-card-bg)' }}>
         <h2 className="font-bold" style={{ color: theme.highlight }}>┌─ Lyrics ─</h2>
         {synced && !follow && <button type="button" onClick={() => setFollow(true)}
           className="border px-2 py-1 text-[11px] hover:brightness-125" style={{ borderColor: theme.accent, color: theme.accent }}>[Follow song]</button>}

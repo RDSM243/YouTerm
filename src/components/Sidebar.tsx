@@ -5,6 +5,7 @@ import { Sparkles, History, Heart, Disc, User, Radio, Plus, ListMusic, Compass, 
 
 interface SidebarProps {
   theme: ThemeConfig;
+  showBackground?: boolean;
   preferences: SidebarPreferences;
   onChangePreferences: (change: Partial<SidebarPreferences>) => void;
   activeCategory: LibraryCategory | null;
@@ -39,7 +40,7 @@ const SectionHeader = ({ theme, label, expanded, controls, focused, onToggle }: 
   <button type="button" aria-label={label} aria-expanded={expanded} aria-controls={controls}
     title={`${expanded ? 'Collapse' : 'Expand'} ${label}`} onClick={onToggle}
     className="flex w-full shrink-0 items-center gap-1.5 border-b px-3 py-1 text-[11px] font-bold uppercase tracking-wider hover:brightness-125"
-    style={{ borderColor: theme.border, color: theme.accent, backgroundColor: theme.cardBg }}>
+    style={{ borderColor: theme.border, color: theme.accent, backgroundColor: 'var(--app-surface-card-bg)' }}>
     {expanded ? <ChevronDown aria-hidden="true" className="h-3 w-3 shrink-0" /> : <ChevronRight aria-hidden="true" className="h-3 w-3 shrink-0" />}
     <span>{label}</span>
     <span aria-hidden="true" className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left">────────────────────────────────</span>
@@ -50,6 +51,7 @@ const SectionHeader = ({ theme, label, expanded, controls, focused, onToggle }: 
 
 export const Sidebar: React.FC<SidebarProps> = ({
   theme,
+  showBackground = false,
   preferences,
   onChangePreferences,
   activeCategory,
@@ -74,11 +76,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       aria-label="Library and playlists"
+      data-background-region="sidebar" data-background-enabled={showBackground}
       className="w-64 flex-shrink-0 flex flex-col border-r select-none overflow-hidden text-xs"
       style={{
         borderColor: theme.border,
-        backgroundColor: theme.bg,
-      }}
+        backgroundColor: showBackground ? 'transparent' : theme.bg,
+        ...(!showBackground ? { '--app-surface-bg': theme.bg, '--app-surface-card-bg': theme.cardBg } : {}),
+      } as React.CSSProperties}
     >
       {/* Box: Library */}
       {showLibrary && <section
@@ -102,7 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onSelectCategory(item.id)}
                 className="w-full text-left px-3 py-1.5 flex items-center justify-between transition-colors group cursor-pointer"
                 style={{
-                  backgroundColor: isSelected ? theme.cardBg : 'transparent',
+                  backgroundColor: isSelected ? 'var(--app-surface-card-bg)' : 'transparent',
                   color: isSelected ? theme.highlight : isPlayingThis ? theme.accent : theme.text,
                   fontWeight: isSelected || isPlayingThis ? 600 : 400,
                 }}
@@ -147,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           role="group"
           aria-label="Playlist actions"
           className="px-3 py-1.5 flex shrink-0 items-center justify-start gap-3 border-b"
-          style={{ borderColor: theme.border, backgroundColor: theme.cardBg }}
+          style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-card-bg)' }}
         >
           <button
             type="button"
@@ -188,7 +192,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }}
                 className="w-full text-left px-3 py-1 flex items-center justify-between transition-colors group cursor-pointer"
                 style={{
-                  backgroundColor: isSelected ? theme.cardBg : 'transparent',
+                  backgroundColor: isSelected ? 'var(--app-surface-card-bg)' : 'transparent',
                   color: isPlayingThis ? theme.accent : isSelected ? theme.highlight : theme.textDim,
                   fontWeight: isSelected || isPlayingThis ? 600 : 400,
                 }}

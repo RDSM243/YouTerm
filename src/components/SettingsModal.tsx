@@ -9,8 +9,8 @@ import { HelpModal } from './HelpModal';
 import { ThemeModal, type ThemeModalProps } from './ThemeModal';
 
 const TABS = [
-  { id: 'general', label: 'General', icon: LayoutPanelLeft, description: 'Choose which sections appear in the sidebar.' },
-  { id: 'appearance', label: 'Appearance', icon: Sliders, description: 'Fonts, spacing, effects and performance.' },
+  { id: 'general', label: 'General', icon: LayoutPanelLeft, description: 'Album artwork and sidebar sections.' },
+  { id: 'appearance', label: 'Appearance', icon: Sliders, description: 'Background, fonts, effects and performance.' },
   { id: 'themes', label: 'Themes', icon: Palette, description: 'Choose a theme or create your own terminal colors.' },
   { id: 'playback', label: 'Playback', icon: Volume2, description: 'Playback volume, mute and audio format.' },
   { id: 'account', label: 'Account', icon: User, description: 'Connect to YouTube Music and manage library sync.' },
@@ -126,6 +126,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6 font-mono"
+      style={{ '--app-surface-bg': theme.bg, '--app-surface-card-bg': theme.cardBg } as React.CSSProperties}
       onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="settings-title"
         className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden border text-xs shadow-2xl"
@@ -165,6 +166,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <p className="mb-5" style={{ color: theme.textDim }}>{currentTab.description}</p>
 
           {activeTab === 'general' && <div className="flex flex-col gap-5">
+            <ToggleSetting theme={theme} label="Hide album cover in track list" checked={themeProps.appearance.hideAlbumCover}
+              description="Hide the faded album artwork in the corner of the track list."
+              onChange={hideAlbumCover => themeProps.onChangeAppearance({ ...themeProps.appearance, hideAlbumCover })} />
             <ToggleSetting theme={theme} label="Show Library" checked={sidebarPreferences.showLibrary}
               description="Show or hide the entire Library section."
               onChange={showLibrary => onChangeSidebarPreferences({ showLibrary })} />

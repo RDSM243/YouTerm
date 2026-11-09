@@ -14,6 +14,7 @@
 
 - **Choose your look:** pick a theme such as Tokyo Night, Dracula, Nord or Gruvbox, or create your own.
 - **Fine-tune the details:** customize colors, fonts, text size, spacing, animations and retro effects.
+- **Set your background:** import an image in Settings → Appearance and adjust brightness, dark overlay and panel opacity. Choose independently whether to show it behind the sidebar, player bar and Spectrum. Settings stays opaque.
 - **Share your themes:** import and export your creations.
 - **See your music:** switch between album artwork, ASCII art, track lists and an audio visualizer.
 - **Listen and organize:** search for music, manage playlists, build your queue and connect your account to access your YouTube Music library.

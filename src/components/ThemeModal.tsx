@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
-import type { AppearanceConfig, ThemeConfig, ThemeId } from '../types';
+import type { AppearanceConfig, BackgroundConfig, ThemeConfig, ThemeId } from '../types';
+import { BackgroundSettings } from './BackgroundSettings';
 import { THEMES } from '../data/themes';
 import { Check, Download, Palette, Plus, Upload, ChevronDown } from 'lucide-react';
 import { accentGlow, cloneTheme, DEFAULT_APPEARANCE, exportThemeJson, importThemeJson, THEME_COLORS, validateCustomTheme, type ThemeColor } from '../services/themeStorage';
@@ -12,13 +13,14 @@ export interface ThemeModalProps {
   onSaveCustomTheme: (theme: ThemeConfig) => void;
   onDeleteCustomTheme: (themeId: ThemeId) => void;
   onChangeAppearance: (appearance: AppearanceConfig) => void;
+  onChangeBackground: (change: Partial<BackgroundConfig>) => void;
   onClose: () => void;
   embedded?: boolean;
   section?: 'themes' | 'appearance';
 }
 
 export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThemes, appearance,
-  onSelectTheme, onSaveCustomTheme, onDeleteCustomTheme, onChangeAppearance, onClose, embedded = false, section }) => {
+  onSelectTheme, onSaveCustomTheme, onDeleteCustomTheme, onChangeAppearance, onChangeBackground, onClose, embedded = false, section }) => {
   const [draft, setDraft] = useState<ThemeConfig | null>(null);
   const [status, setStatus] = useState('');
   const [selectedTab, setTab] = useState<'themes' | 'appearance'>('themes');
@@ -159,6 +161,7 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
             </div>
           ) : (
             <div className="flex flex-col gap-4">
+              <BackgroundSettings theme={theme} config={appearance.background} onChange={onChangeBackground} />
               <label className="flex flex-col gap-1.5">
                 <span className="text-[11px] font-bold" style={{ color: theme.textDim }}>Font (uses fonts installed on your system)</span>
                 <div className="relative flex items-center">
@@ -212,7 +215,8 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
                   <span><span className="block font-bold">{label}</span><span className="block mt-1 text-[10px]" style={{ color: theme.textDim }}>{description}</span></span>
                 </label>
               ))}
-              <button className={`${buttonClass} self-start`} style={panelStyle} onClick={() => updateAppearance(DEFAULT_APPEARANCE)}>Reset appearance</button>
+              <button className={`${buttonClass} self-start`} style={panelStyle} onClick={() => updateAppearance({ ...DEFAULT_APPEARANCE,
+                background: { ...DEFAULT_APPEARANCE.background, imageRevision: appearance.background.imageRevision, imageName: appearance.background.imageName } })}>Reset appearance</button>
             </div>
           )}
         </div>

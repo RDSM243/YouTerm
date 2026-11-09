@@ -51,7 +51,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
       className="flex items-center justify-between gap-2 px-3 py-1.5 border-b text-xs select-none"
       style={{
         borderColor: theme.border,
-        backgroundColor: theme.cardBg,
+        backgroundColor: 'var(--app-surface-card-bg)',
       }}
     >
       {/* Search Input with Box Border */}
@@ -123,7 +123,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
           style={{
             borderColor: theme.border,
             color: theme.accent,
-            backgroundColor: theme.bg,
+            backgroundColor: 'var(--app-surface-bg)',
           }}
         >
           <LogIn className="w-3 h-3" />
@@ -140,7 +140,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
           style={{
             borderColor: theme.border,
             color: theme.accent,
-            backgroundColor: theme.bg,
+            backgroundColor: 'var(--app-surface-bg)',
           }}
         >
           <Settings className="w-3.5 h-3.5" />
