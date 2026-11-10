@@ -1114,7 +1114,17 @@ impl InnerTubeClient {
                 }
             }
         }
+        let binary_name = if cfg!(target_os = "windows") { "yt-dlp.exe" } else { "yt-dlp" };
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(parent) = exe.parent() {
+                let bundled = parent.join(binary_name);
+                if bundled.is_file() {
+                    return bundled;
+                }
+            }
+        }
         let candidates = [
+            ".venv/Scripts/yt-dlp.exe",
             ".venv/bin/yt-dlp",
             "../YouTerm/.venv/bin/yt-dlp",
             "/usr/bin/yt-dlp",
@@ -1126,7 +1136,7 @@ impl InnerTubeClient {
                 return p;
             }
         }
-        PathBuf::from("yt-dlp")
+        PathBuf::from(binary_name)
     }
 
     /// Prefetch the first 512 KB of an audio track into memory for instant 0ms playback start

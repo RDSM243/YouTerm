@@ -13,7 +13,8 @@
     "app": "./src-tauri/target/release/youterm",
     "app:check": "./src-tauri/target/release/youterm --check",
     "app:smoke": "./src-tauri/target/release/youterm --smoke-test",
-    "package": "bash scripts/package.sh"
+    "package": "bash scripts/package.sh",
+    "package:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

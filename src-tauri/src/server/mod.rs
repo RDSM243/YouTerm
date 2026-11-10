@@ -139,7 +139,20 @@ pub async fn open_external_url(
     let is_https = parsed.scheme() == "https";
 
     if is_https || is_local_auth {
-        let _ = std::process::Command::new("xdg-open").arg(&raw_url).spawn();
+        #[cfg(target_os = "windows")]
+        let mut command = {
+            use std::os::windows::process::CommandExt;
+            let mut command = std::process::Command::new("rundll32.exe");
+            command.arg("url.dll,FileProtocolHandler").creation_flags(0x08000000);
+            command
+        };
+        #[cfg(target_os = "macos")]
+        let mut command = std::process::Command::new("open");
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let mut command = std::process::Command::new("xdg-open");
+        if command.arg(&raw_url).spawn().is_err() {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
         return Json(json!({ "ok": true })).into_response();
     }
 

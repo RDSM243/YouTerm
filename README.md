@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Your music, your way.</strong></p>
 
-**YouTerm** is an open source music player for Linux that connects to **YouTube Music**. It brings the look of a terminal to your music library, with an interface you can customize to match your style.
+**YouTerm** is an open source music player for Linux and Windows that connects to **YouTube Music**. It brings the look of a terminal to your music library, with an interface you can customize to match your style.
 
 ![YouTerm showing a music library and album artwork with a green terminal theme](./docs/images/youterm.jpeg)
 
@@ -24,13 +24,15 @@ The interface is built with **React and CSS**. With the source code available, y
 
 ## Download
 
-YouTerm is available for **Linux (x86_64)** as an **AppImage**.
+YouTerm is available for **Linux (x86_64)** as an **AppImage** and **Windows 10/11 (x64)** as a **setup executable** or **portable ZIP**.
 
 **[Download YouTerm](https://github.com/RDSM243/YouTerm/releases/latest)**
 
-Download the `.AppImage` file, allow it to run in your file manager's properties and open the player.
+On Linux, download the `.AppImage` file, allow it to run in your file manager's properties and open the player.
 
-**Windows and macOS** versions are planned for the future.
+On Windows, run the `-setup.exe` installer. It installs Microsoft Edge WebView2 Runtime if needed. For the portable version, extract the entire ZIP and open `YouTerm.exe`, keeping the `dist` folder next to it; WebView2 must already be installed.
+
+A **macOS** version is planned for the future.
 
 ## Get involved
 
