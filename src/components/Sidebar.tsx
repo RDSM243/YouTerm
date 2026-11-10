@@ -77,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside
       aria-label="Library and playlists"
       data-background-region="sidebar" data-background-enabled={showBackground}
-      className="w-64 flex-shrink-0 flex flex-col border-r select-none overflow-hidden text-xs"
+      className="w-full min-h-0 min-w-0 flex-1 flex flex-col select-none overflow-hidden text-xs"
       style={{
         borderColor: theme.border,
         backgroundColor: showBackground ? 'transparent' : theme.bg,

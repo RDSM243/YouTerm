@@ -63,6 +63,7 @@ import { getVisibleLibraryCategories, loadSidebarPreferences, normalizeSidebarPr
 import { TopSearchBar } from './components/TopSearchBar';
 import { BackgroundLayer } from './components/BackgroundLayer';
 import { Sidebar } from './components/Sidebar';
+import { ResizableSplit } from './components/ResizableSplit';
 import { TrackListView, formatSeconds } from './components/TrackListView';
 import { AsciiArtViewer } from './components/AsciiArtViewer';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
@@ -1621,9 +1622,10 @@ export default function App() {
           />
 
           {/* Main TUI Content Grid */}
-          <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
-            {/* Left Sidebar: Library & Playlists */}
-            <Sidebar
+          <ResizableSplit theme={theme} storageKey="sidebar" label="Resize sidebar"
+            unit="pixels" defaultSize={256} minFirst={176} minSecond={420} maxFirst={480}
+            showFirst={hasSidebar}
+            first={<Sidebar
               theme={theme}
               showBackground={backgroundVisible && appearance.background.showInSidebar}
               preferences={sidebarPreferences}
@@ -1653,9 +1655,9 @@ export default function App() {
               onPlaylistContextMenu={(playlist, x, y) => openMenu(x, y, buildPlaylistMenu(playlist), playlist.title)}
               isFocused={isSidebarFocused}
               isLoggedIn={session.isLoggedIn}
-            />
+            />}
 
-            {/* Center / Right Main View depending on active viewMode */}
+            second={<>
             {viewMode === 'tracklist' && (
               <TrackListView
                 theme={theme}
@@ -1712,10 +1714,10 @@ export default function App() {
             )}
 
             {viewMode === 'split' && (
-              <section aria-label="Split view" className="flex-1 flex flex-col lg:flex-row min-h-0 min-w-0 overflow-hidden">
-                {/* Left Split: Tracklist */}
-                <div className="flex-1 flex flex-col min-h-0 min-w-0 border-b lg:border-b-0 lg:border-r" style={{ borderColor: theme.border }}>
-                  <TrackListView
+              <ResizableSplit theme={theme} storageKey="artwork" label="Resize album artwork panel" regionLabel="Split view"
+                rowAt="lg" defaultSize={{ row: 40, column: 100 / 3 }}
+                minFirst={{ row: 260, column: 120 }} minSecond={{ row: 300, column: 260 }}
+                first={<TrackListView
                     theme={theme}
                     onPrepareTrack={appearance.lowPower ? undefined : (track) => audioEngine.prepare(track.youtubeId)}
                     title={currentViewTitle}
@@ -1743,12 +1745,9 @@ export default function App() {
                         moveInPlaylist(selectedPlaylist, from, to);
                       }
                     }}
-                  />
-                </div>
+                  />}
 
-                {/* Right Split: Artwork, song information and lyrics */}
-                <div className="flex-[2] lg:flex-[1.5] flex flex-col min-h-0 min-w-0">
-                  <AsciiArtViewer
+                second={<AsciiArtViewer
                     showArtworkIcon={false}
                     theme={theme}
                     track={playerState.currentTrack}
@@ -1769,9 +1768,8 @@ export default function App() {
                         onSeek={handleSeek}
                       />
                     }
-                  />
-                </div>
-              </section>
+                  />}
+              />
             )}
 
             {viewMode === 'visualizer' && (
@@ -1783,7 +1781,8 @@ export default function App() {
                 currentTrack={playerState.currentTrack}
               />
             )}
-          </div>
+            </>}
+          />
 
           {/* Playback Toast / Warning */}
           {playbackWarning && (

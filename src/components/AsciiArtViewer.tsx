@@ -2,6 +2,7 @@ import React, { useEffect, useId, useState } from 'react';
 import { AsciiConfig, AsciiRenderMode, AsciiResult, Track, ThemeConfig } from '../types';
 import { COVER_MODES } from '../data/settings';
 import { loadCoverArtwork, type CoverArtwork } from '../services/coverArtwork';
+import { ResizableSplit } from './ResizableSplit';
 import { Copy, RefreshCw, Check, Image as ImageIcon, Sparkles, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface AsciiArtViewerProps {
@@ -83,7 +84,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
   }
 
   return (
-    <div role="region" aria-label="Album artwork" className="flex-1 flex flex-col min-h-0 relative select-none font-mono overflow-hidden">
+    <div role="region" aria-label="Album artwork" className="flex-1 flex flex-col min-h-0 min-w-0 relative select-none font-mono overflow-hidden">
       {/* Top Header */}
       <div
         className="px-4 py-2 border-b flex shrink-0 flex-wrap items-center justify-between gap-2 z-10 text-xs"
@@ -150,8 +151,8 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
       </div>
 
       <div id={controlsId} role="group" aria-label="Cover art controls" hidden={!showControls}
-        className={`${showControls ? 'grid' : 'hidden'} shrink-0 grid-cols-1 gap-3 border-b px-4 py-2 text-xs sm:grid-cols-2 xl:grid-cols-4`}
-        style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
+        className={`${showControls ? 'grid' : 'hidden'} shrink-0 gap-3 border-b px-4 py-2 text-xs`}
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-[10px] font-bold tracking-wider" style={{ color: theme.textDim }}>RENDER MODE</span>
           <span className="relative flex items-center">
@@ -206,8 +207,9 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
       </div>
 
       {/* Artwork and independently scrolling song details */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 min-w-0 overflow-hidden">
-        <div className={`flex min-h-0 min-w-0 flex-1 ${sidePanel ? 'flex-col' : 'flex-col md:flex-row'}`}>
+      <ResizableSplit theme={theme} storageKey="lyrics" label="Resize artwork and lyrics"
+        rowAt="md" defaultSize={50} minFirst={{ row: 140, column: 100 }} minSecond={{ row: 180, column: 120 }}
+        first={<div className={`flex min-h-0 min-w-0 flex-1 ${sidePanel ? 'flex-col' : 'flex-col md:flex-row'}`}>
           {/* Left / Center: Display Area */}
           <div data-background-region="artwork" className="flex-1 min-h-0 min-w-0 overflow-auto p-4 flex flex-col items-center custom-scrollbar"
             style={{ backgroundColor: 'transparent' }}>
@@ -314,14 +316,14 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
               </div>
             </div>
           )}
-        </div>
+        </div>}
 
-        {sidePanel && <aside aria-label="Song details and lyrics"
-          className="flex min-h-0 min-w-0 flex-1 flex-col border-t md:border-t-0 md:border-l"
-          style={{ borderColor: theme.border, backgroundColor: 'transparent' }}>
+        second={sidePanel ? <aside aria-label="Song details and lyrics"
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
+          style={{ backgroundColor: 'transparent' }}>
           {sidePanel}
-        </aside>}
-      </div>
+        </aside> : null}
+      />
     </div>
   );
 };

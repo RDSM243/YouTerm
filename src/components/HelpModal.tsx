@@ -27,6 +27,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ theme, onClose, embedded =
     { key: '[ / ]', desc: 'Seek backward / forward 5 seconds' },
     { key: 'Right-click / Menu / Shift+F10', desc: 'Context menu: play next, queue, add/remove from playlist, copy link and more' },
     { key: 'Click & Drag', desc: 'Drag and drop tracks to reorder in custom playlists' },
+    { key: 'Drag divider', desc: 'Resize the sidebar, artwork and lyrics panels. Double-click a divider to reset its size.' },
     { key: 't', desc: 'Cycle Unix color themes (Tokyo Night, Mint, CRT Green, Amber, Dracula, Nord...)' },
     { key: '?', desc: 'Toggle this Help & Keybindings window' },
     { key: 'Esc', desc: 'Close any active modal or return to tracklist' },
