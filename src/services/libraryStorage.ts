@@ -1,5 +1,6 @@
-import { THEMES } from '../data/themes';
+import { DEFAULT_THEME_ID, THEMES } from '../data/themes';
 import { loadCustomThemes } from './themeStorage';
+import { normalizeTrackAlbum } from './trackAlbum';
 import { AsciiConfig, LibraryCategory, Playlist, ThemeId, Track, TuiViewMode, UserSession } from '../types';
 
 const STORAGE_KEYS = {
@@ -79,7 +80,7 @@ export function loadAccountLikedTracks(): Track[] {
   try {
     const tracks = JSON.parse(localStorage.getItem(STORAGE_KEYS.LIKED_TRACK_METADATA) || '[]');
     if (Array.isArray(tracks)) {
-      return tracks.filter((t: Track) => (t.duration || 0) <= 1200 && !NON_MUSIC_FILTER.test(t.title || ''));
+      return tracks.filter((t: Track) => (t.duration || 0) <= 1200 && !NON_MUSIC_FILTER.test(t.title || '')).map(normalizeTrackAlbum);
     }
     return [];
   } catch { return []; }
@@ -96,7 +97,8 @@ export function loadPlaylists(): Playlist[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const filtered = parsed.filter((p: Playlist) => !NON_MUSIC_FILTER.test(p.title || ''));
+        const filtered = parsed.filter((p: Playlist) => !NON_MUSIC_FILTER.test(p.title || ''))
+          .map((playlist: Playlist) => ({ ...playlist, tracks: playlist.tracks.map(normalizeTrackAlbum) }));
         const userPlaylists = filtered.filter((p: Playlist) => !p.id.startsWith('yt-cat-'));
         if (userPlaylists.length > 0) {
           return userPlaylists;
@@ -119,7 +121,7 @@ export function loadHistory(): Track[] {
     const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) return parsed.map(normalizeTrackAlbum);
     }
   } catch (e) {}
   return [];
@@ -150,7 +152,7 @@ export function loadThemeId(): ThemeId {
     const raw = localStorage.getItem(STORAGE_KEYS.THEME) as ThemeId;
     if (raw && (Object.hasOwn(THEMES, raw) || loadCustomThemes().some(theme => theme.id === raw))) return raw;
   } catch (e) {}
-  return 'clean_minimalism';
+  return DEFAULT_THEME_ID;
 }
 
 export function saveThemeId(themeId: ThemeId): void {
@@ -164,7 +166,7 @@ export function loadAsciiConfig(): AsciiConfig {
     const raw = localStorage.getItem(STORAGE_KEYS.ASCII_CONFIG);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const validModes = ['half_block', 'braille', 'original_hd'];
+      const validModes = ['half_block', 'braille', 'original_hd', 'matrix_code', 'retro_crt'];
       if (parsed && !validModes.includes(parsed.mode)) {
         parsed.mode = 'half_block';
       }
@@ -194,9 +196,10 @@ export function loadPlayerPreferences(): PlayerPreferences {
           shuffle: typeof parsed.shuffle === 'boolean' ? parsed.shuffle : defaultPlayerPreferences.shuffle,
           repeat: ['off', 'all', 'one'].includes(parsed.repeat) ? parsed.repeat : defaultPlayerPreferences.repeat,
           audioFormat: ['m4a', 'webm'].includes(parsed.audioFormat) ? parsed.audioFormat : defaultPlayerPreferences.audioFormat,
-          viewMode: ['tracklist', 'ascii_cover', 'split', 'visualizer', 'lyrics', 'cli', 'export_script'].includes(parsed.viewMode)
-            ? parsed.viewMode
-            : defaultPlayerPreferences.viewMode,
+          viewMode: parsed.viewMode === 'lyrics' ? 'split'
+            : ['tracklist', 'ascii_cover', 'split', 'visualizer'].includes(parsed.viewMode)
+              ? parsed.viewMode
+              : defaultPlayerPreferences.viewMode,
           activeCategory: ['explore', 'made_for_you', 'recently_played', 'liked_songs', 'albums', 'artists', 'podcasts'].includes(parsed.activeCategory)
             ? parsed.activeCategory
             : defaultPlayerPreferences.activeCategory,

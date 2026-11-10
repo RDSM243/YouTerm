@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { ThemeConfig, UserSession } from '../types';
-import { Search, HelpCircle, Palette, Key, Eye, RefreshCw, User } from 'lucide-react';
+import { Search, LogIn, Settings } from 'lucide-react';
 
 interface TopSearchBarProps {
   theme: ThemeConfig;
@@ -9,11 +9,9 @@ interface TopSearchBarProps {
   onSearchChange: (query: string) => void;
   onSearchSubmit: (e: React.FormEvent) => void;
   isLoading: boolean;
-  onOpenHelp: () => void;
   onOpenAuth: () => void;
-  onOpenTheme: () => void;
-  asciiMode: string;
-  onCycleAsciiMode: () => void;
+  onOpenSettings: () => void;
+  isModalOpen: boolean;
   isSearching: boolean;
 }
 
@@ -24,17 +22,16 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   onSearchChange,
   onSearchSubmit,
   isLoading,
-  onOpenHelp,
   onOpenAuth,
-  onOpenTheme,
-  asciiMode,
-  onCycleAsciiMode,
+  onOpenSettings,
+  isModalOpen,
   isSearching,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isModalOpen) return;
       // '/' focuses search if not already in an input
       if (e.key === '/' && document.activeElement !== inputRef.current) {
         e.preventDefault();
@@ -47,24 +44,24 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isModalOpen]);
 
   return (
     <div
       className="flex items-center justify-between gap-2 px-3 py-1.5 border-b text-xs select-none"
       style={{
         borderColor: theme.border,
-        backgroundColor: theme.cardBg,
+        backgroundColor: 'var(--app-surface-card-bg)',
       }}
     >
       {/* Search Input with Box Border */}
-      <form onSubmit={onSearchSubmit} className="flex-1 flex items-center gap-2 max-w-2xl">
+      <form onSubmit={onSearchSubmit} className="min-w-0 flex-1 flex items-center gap-2 max-w-2xl">
         <span style={{ color: theme.accent }} className="font-bold flex items-center gap-1">
           <Search className="w-3.5 h-3.5" />
           <span>Search:</span>
         </span>
         <div
-          className="flex-1 flex items-center px-2 py-0.5 border rounded-none transition-colors"
+          className="min-w-0 flex-1 flex items-center px-2 py-0.5 border rounded-none transition-colors"
           style={{
             borderColor: theme.border,
             backgroundColor: theme.bg,
@@ -93,7 +90,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
       </form>
 
       {/* Right Quick Action Status Badges */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex shrink-0 items-center gap-1.5">
         {/* Loading Indicator */}
         {isLoading ? (
           <div
@@ -118,78 +115,35 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
           </div>
         ) : null}
 
-        {/* Cover Mode Selector */}
-        <button
-          onClick={onCycleAsciiMode}
-          className="px-2 py-0.5 border flex items-center gap-1 hover:brightness-125 transition-all text-[11px]"
-          title="Cycle Cover Art Mode"
+        {!session?.isLoggedIn && <button
+          type="button"
+          onClick={onOpenAuth}
+          className="px-2 py-0.5 border flex items-center gap-1 whitespace-nowrap hover:brightness-125 transition-all text-[11px]"
+          title="Log in to your YouTube Music account"
           style={{
             borderColor: theme.border,
             color: theme.accent,
-            backgroundColor: theme.bg,
+            backgroundColor: 'var(--app-surface-bg)',
           }}
         >
-          <Eye className="w-3 h-3" />
-          <span>Cover: {asciiMode}</span>
-        </button>
+          <LogIn className="w-3 h-3" />
+          <span>Log in</span>
+        </button>}
 
-
-        {/* Theme Switcher */}
         <button
-          onClick={onOpenTheme}
-          className="px-2 py-0.5 border flex items-center gap-1 hover:brightness-125 transition-all text-[11px]"
-          title="Change Color Theme (or press 't')"
+          type="button"
+          onClick={onOpenSettings}
+          aria-label="Open settings"
+          aria-haspopup="dialog"
+          className="p-1 border flex items-center justify-center hover:brightness-125 transition-all"
+          title="Settings"
           style={{
             borderColor: theme.border,
-            color: theme.text,
-            backgroundColor: theme.bg,
+            color: theme.accent,
+            backgroundColor: 'var(--app-surface-bg)',
           }}
         >
-          <Palette className="w-3 h-3" />
-          <span>Theme [{theme.name.split(' ')[0]}]</span>
-        </button>
-
-        {/* Auth / Account / Sync */}
-        <button
-          onClick={onOpenAuth}
-          className="px-2 py-0.5 border flex items-center gap-1 hover:brightness-125 transition-all text-[11px]"
-          title={
-            session?.isLoggedIn
-              ? `Connected: ${session.email || session.username} (Click to manage account)`
-              : 'Connect & Sync YouTube Music Account'
-          }
-          style={{
-            borderColor: theme.border,
-            color: session?.isLoggedIn ? theme.highlight : theme.accent,
-            backgroundColor: theme.bg,
-          }}
-        >
-          {session?.isLoggedIn ? (
-            <>
-              <User className="w-3 h-3" />
-              <span>{session.email || session.username || 'Account'}</span>
-            </>
-          ) : (
-            <>
-              <RefreshCw className="w-3 h-3" />
-              <span>Sync Account</span>
-            </>
-          )}
-        </button>
-
-        {/* Help */}
-        <button
-          onClick={onOpenHelp}
-          className="px-2 py-0.5 border flex items-center gap-1 hover:brightness-125 transition-all text-[11px] font-bold"
-          title="Keyboard Shortcuts & Help"
-          style={{
-            borderColor: theme.warning,
-            color: theme.warning,
-            backgroundColor: theme.bg,
-          }}
-        >
-          <HelpCircle className="w-3 h-3" />
-          <span>Help [?]</span>
+          <Settings className="w-3.5 h-3.5" />
         </button>
       </div>
     </div>

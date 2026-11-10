@@ -1,5 +1,5 @@
 interface DesktopBridge {
-  platform: 'linux';
+  platform: 'linux' | 'windows' | 'macos';
   username?: string;
   hostname?: string;
   openExternal: (url: string) => void;
@@ -10,7 +10,7 @@ declare global {
 }
 
 export function isDesktopApp(): boolean {
-  return typeof window !== 'undefined' && window.__YOUTERM_DESKTOP__?.platform === 'linux';
+  return typeof window !== 'undefined' && !!window.__YOUTERM_DESKTOP__;
 }
 
 export function openExternal(url: string): void {

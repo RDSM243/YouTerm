@@ -1,13 +1,15 @@
 pub mod audio;
 pub mod auth;
+pub mod background;
 pub mod explore;
 pub mod fonts;
 pub mod library;
+pub mod lyrics;
 pub mod proxy;
 pub mod search;
 
 use axum::{
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, options, post},
@@ -36,10 +38,18 @@ pub fn build_router(state: Arc<AppState>) -> Router {
 
     Router::new()
         .route("/api/health", get(health_check))
+        .route(
+            "/api/background/image",
+            get(background::get_image)
+                .put(background::put_image)
+                .delete(background::delete_image)
+                .layer(DefaultBodyLimit::max(background::MAX_IMAGE_BYTES)),
+        )
         .route("/api/search", get(search::search_tracks))
         .route("/api/search/suggestions", get(search::search_suggestions))
         .route("/api/resolve-track", get(search::resolve_track))
         .route("/api/explore", get(explore::get_explore))
+        .route("/api/lyrics", get(lyrics::get_lyrics))
         .route("/api/audio/:videoId", get(audio::get_audio_metadata))
         .route(
             "/api/audio/:videoId/metadata",
@@ -63,6 +73,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/user/playlists", get(library::get_user_playlists))
         .route("/api/user/liked", get(library::get_user_liked))
         .route("/api/playlist/fetch", get(library::fetch_playlist))
+        .route("/api/tracks/:videoId/album", get(library::get_track_album))
         .route(
             "/api/tracks/durations",
             post(library::get_tracks_durations),
@@ -128,7 +139,20 @@ pub async fn open_external_url(
     let is_https = parsed.scheme() == "https";
 
     if is_https || is_local_auth {
-        let _ = std::process::Command::new("xdg-open").arg(&raw_url).spawn();
+        #[cfg(target_os = "windows")]
+        let mut command = {
+            use std::os::windows::process::CommandExt;
+            let mut command = std::process::Command::new("rundll32.exe");
+            command.arg("url.dll,FileProtocolHandler").creation_flags(0x08000000);
+            command
+        };
+        #[cfg(target_os = "macos")]
+        let mut command = std::process::Command::new("open");
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let mut command = std::process::Command::new("xdg-open");
+        if command.arg(&raw_url).spawn().is_err() {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
         return Json(json!({ "ok": true })).into_response();
     }
 
@@ -150,6 +174,10 @@ pub async fn smoke_test_report(
         .get("bridge")
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+        && native_report
+            .get("settings")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
         && native_report
             .get("themes")
             .and_then(|v| v.as_bool())

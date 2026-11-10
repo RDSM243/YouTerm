@@ -1,6 +1,24 @@
-import { ThemeConfig, BuiltinThemeId } from '../types';
+import type { ThemeConfig, BuiltinThemeId } from '../types';
+
+export const DEFAULT_THEME_ID: BuiltinThemeId = 'linux_mint';
 
 export const THEMES: Record<BuiltinThemeId, ThemeConfig> = {
+  linux_mint: {
+    id: 'linux_mint',
+    name: 'Default',
+    bg: '#141819',
+    cardBg: '#1b2224',
+    border: '#37474f',
+    text: '#cfd8dc',
+    textDim: '#78909c',
+    accent: '#87cf3e', // Classic Mint Green
+    accentGlow: 'rgba(135, 207, 62, 0.25)',
+    highlight: '#a6e22e',
+    warning: '#f0c674',
+    error: '#e06c75',
+    promptSymbol: 'mint@tui:~$',
+    hostname: 'didi@linux-mint',
+  },
   clean_minimalism: {
     id: 'clean_minimalism',
     name: 'Clean Minimalism',
@@ -32,22 +50,6 @@ export const THEMES: Record<BuiltinThemeId, ThemeConfig> = {
     error: '#f7768e',
     promptSymbol: 'tokyo@night:~$',
     hostname: 'didi@tokyo-night',
-  },
-  linux_mint: {
-    id: 'linux_mint',
-    name: 'Linux Mint Terminal',
-    bg: '#141819',
-    cardBg: '#1b2224',
-    border: '#37474f',
-    text: '#cfd8dc',
-    textDim: '#78909c',
-    accent: '#87cf3e', // Classic Mint Green
-    accentGlow: 'rgba(135, 207, 62, 0.25)',
-    highlight: '#a6e22e',
-    warning: '#f0c674',
-    error: '#e06c75',
-    promptSymbol: 'mint@tui:~$',
-    hostname: 'didi@linux-mint',
   },
   retro_green: {
     id: 'retro_green',
@@ -176,5 +178,21 @@ export const THEMES: Record<BuiltinThemeId, ThemeConfig> = {
     error: '#dc322f',
     promptSymbol: 'solar@term:~$',
     hostname: 'didi@solaris',
+  },
+  crimson_moon: {
+    id: 'crimson_moon',
+    name: 'Crimson Moon',
+    bg: '#050000',
+    cardBg: '#140202',
+    border: '#5c1010',
+    text: '#edd6d6',
+    textDim: '#bb8383',
+    accent: '#ff1a1a',
+    accentGlow: 'rgba(255, 26, 26, 0.22)',
+    highlight: '#ff6b63',
+    warning: '#f6aaa0',
+    error: '#ff4d4d',
+    promptSymbol: 'user@crimson-moon:~$',
+    hostname: 'user@crimson-moon',
   },
 };

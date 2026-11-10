@@ -97,13 +97,9 @@ fn resolve_config_dir(custom_data_dir: Option<&Path>) -> PathBuf {
         let _ = fs::create_dir_all(&dir);
         return dir;
     }
-    let home = env::var("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."));
-    let xdg_config = env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| home.join(".config"));
-    let dir = xdg_config.join("youterm");
+    let dir = directories::BaseDirs::new()
+        .map(|base| base.config_dir().join("youterm"))
+        .unwrap_or_else(|| PathBuf::from("config").join("youterm"));
     let _ = fs::create_dir_all(&dir);
     dir
 }
@@ -214,16 +210,22 @@ fn get_username() -> String {
 }
 
 fn get_hostname() -> String {
+    if let Ok(name) = env::var("COMPUTERNAME") {
+        if !name.trim().is_empty() {
+            return name;
+        }
+    }
     fs::read_to_string("/etc/hostname")
         .map(|s| s.trim().to_string())
         .ok()
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "linux".to_string())
+        .unwrap_or_else(|| env::consts::OS.to_string())
 }
 
 fn build_initialization_script(smoke_test: bool) -> String {
     let username_json = serde_json::to_string(&get_username()).unwrap_or_else(|_| "\"user\"".to_string());
-    let hostname_json = serde_json::to_string(&get_hostname()).unwrap_or_else(|_| "\"linux\"".to_string());
+    let hostname_json = serde_json::to_string(&get_hostname()).unwrap_or_else(|_| "\"localhost\"".to_string());
+    let platform_json = serde_json::to_string(env::consts::OS).expect("Valid platform name");
 
     let mut script = format!(
         r#"
@@ -237,7 +239,7 @@ fn build_initialization_script(smoke_test: bool) -> String {
   }};
   Object.defineProperty(window, '__YOUTERM_DESKTOP__', {{
     value: Object.freeze({{
-      platform: 'linux',
+      platform: {platform},
       username: {username},
       hostname: {hostname},
       openExternal: openExt
@@ -258,7 +260,8 @@ fn build_initialization_script(smoke_test: bool) -> String {
 }})();
 "#,
         username = username_json,
-        hostname = hostname_json
+        hostname = hostname_json,
+        platform = platform_json
     );
 
     if smoke_test {
@@ -266,15 +269,24 @@ fn build_initialization_script(smoke_test: bool) -> String {
             r#"
 (function() {
   const checkUi = () => {
-    const ready = !!document.querySelector('[title*="Color Theme"]');
+    const button = document.querySelector('button[aria-label="Open settings"]');
+    const ready = !!button;
     if (!ready) {
       setTimeout(checkUi, 250);
       return;
     }
+    const dialog = document.querySelector('[role="dialog"][aria-labelledby="settings-title"]');
+    if (!dialog) {
+      button.click();
+      setTimeout(checkUi, 150);
+      return;
+    }
     const payload = {
       ready: true,
-      bridge: window.__YOUTERM_DESKTOP__?.platform === 'linux',
-      themes: !!document.querySelector('[title*="Color Theme"]'),
+      bridge: ['linux', 'windows', 'macos'].includes(window.__YOUTERM_DESKTOP__?.platform),
+      platform: window.__YOUTERM_DESKTOP__?.platform,
+      settings: dialog.querySelectorAll('[role="tab"]').length === 6,
+      themes: !!dialog.querySelector('#settings-tab-themes'),
       audio: !!(new Audio().canPlayType('audio/mp4; codecs="mp4a.40.2"') || new Audio().canPlayType('audio/webm; codecs="opus"')),
       font: getComputedStyle(document.body).fontFamily,
       width: window.innerWidth,
@@ -326,7 +338,8 @@ fn main() {
     if opts.check {
         let report = json!({
             "engine": "rust-tauri-v2",
-            "webkit": "2.52.6",
+            "platform": env::consts::OS,
+            "webview": if cfg!(target_os = "windows") { "webview2" } else if cfg!(target_os = "macos") { "wkwebview" } else { "webkitgtk" },
             "built": static_dir.join("index.html").is_file(),
             "gemini": false,
         });
@@ -335,7 +348,7 @@ fn main() {
     }
 
     let (std_listener, bound_port) = bind_local_listener(opts.port);
-    let app_state = AppState::new(bound_port, static_dir, opts.smoke_test);
+    let app_state = AppState::new(bound_port, static_dir, config_dir.clone(), opts.smoke_test);
 
     if opts.server_only {
         let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");

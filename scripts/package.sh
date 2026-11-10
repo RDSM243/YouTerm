@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-VERSION="0.2.0"
+VERSION="$(node -p "require('./package.json').version")"
 ARCH_APPIMAGE="x86_64"
 
 echo "==> [1/3] Building React 19 + Tailwind CSS frontend (Vite)..."
@@ -63,7 +63,7 @@ exec "$HERE/usr/lib/youterm/youterm" "$@"
 EOF
 chmod 0755 "$STAGE/AppRun"
 
-cat > "$STAGE/youterm.desktop" << 'EOF'
+cat > "$STAGE/youterm.desktop" << EOF
 [Desktop Entry]
 Type=Application
 Name=YouTerm
@@ -75,6 +75,7 @@ Terminal=false
 Categories=AudioVideo;Audio;Player;
 StartupNotify=true
 StartupWMClass=youterm
+X-AppImage-Version=${VERSION}
 EOF
 
 cp "$STAGE/youterm.desktop" "$STAGE/usr/share/applications/youterm.desktop"

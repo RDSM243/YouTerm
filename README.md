@@ -6,7 +6,7 @@
 
 <p align="center"><strong>Your music, your way.</strong></p>
 
-**YouTerm** is an open source music player for Linux that connects to **YouTube Music**. It brings the look of a terminal to your music library, with an interface you can customize to match your style.
+**YouTerm** is an open source music player for Linux and Windows that connects to **YouTube Music**. It brings the look of a terminal to your music library, with an interface you can customize to match your style.
 
 ![YouTerm showing a music library and album artwork with a green terminal theme](./docs/images/youterm.jpeg)
 
@@ -14,6 +14,7 @@
 
 - **Choose your look:** pick a theme such as Tokyo Night, Dracula, Nord or Gruvbox, or create your own.
 - **Fine-tune the details:** customize colors, fonts, text size, spacing, animations and retro effects.
+- **Set your background:** import an image in Settings → Appearance and adjust brightness, dark overlay and panel opacity. Choose independently whether to show it behind the sidebar, player bar and Spectrum. Settings stays opaque.
 - **Share your themes:** import and export your creations.
 - **See your music:** switch between album artwork, ASCII art, track lists and an audio visualizer.
 - **Listen and organize:** search for music, manage playlists, build your queue and connect your account to access your YouTube Music library.
@@ -23,13 +24,15 @@ The interface is built with **React and CSS**. With the source code available, y
 
 ## Download
 
-YouTerm is available for **Linux (x86_64)** as an **AppImage**.
+YouTerm is available for **Linux (x86_64)** as an **AppImage** and **Windows 10/11 (x64)** as a **setup executable** or **portable ZIP**.
 
 **[Download YouTerm](https://github.com/RDSM243/YouTerm/releases/latest)**
 
-Download the `.AppImage` file, allow it to run in your file manager's properties and open the player.
+On Linux, download the `.AppImage` file, allow it to run in your file manager's properties and open the player.
 
-**Windows and macOS** versions are planned for the future.
+On Windows, run the `-setup.exe` installer. It installs Microsoft Edge WebView2 Runtime if needed. For the portable version, extract the entire ZIP and open `YouTerm.exe`, keeping the `dist` folder next to it; WebView2 must already be installed.
+
+A **macOS** version is planned for the future.
 
 ## Get involved
 

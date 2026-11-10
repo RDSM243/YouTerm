@@ -5,6 +5,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 
+use crate::server::background::BackgroundStore;
+use crate::server::lyrics::LyricsService;
+use crate::youtube::albums::TrackAlbum;
 use crate::youtube::innertube::InnerTubeClient;
 use crate::youtube::models::ExploreCategory;
 
@@ -28,6 +31,9 @@ pub struct AppState {
     pub explore_cache: RwLock<Option<(Vec<ExploreCategory>, Instant)>>,
     pub fonts_cache: RwLock<Option<Vec<String>>>,
     pub image_cache: RwLock<HashMap<String, (Bytes, String, Instant)>>,
+    pub lyrics: LyricsService,
+    pub background: BackgroundStore,
+    pub album_cache: RwLock<HashMap<String, (Option<TrackAlbum>, Instant)>>,
     pub oauth_pending: RwLock<HashMap<String, PendingAuth>>,
     pub port: u16,
     pub static_dir: PathBuf,
@@ -36,12 +42,15 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(port: u16, static_dir: PathBuf, smoke_test: bool) -> Arc<Self> {
+    pub fn new(port: u16, static_dir: PathBuf, config_dir: PathBuf, smoke_test: bool) -> Arc<Self> {
         Arc::new(Self {
             innertube: InnerTubeClient::new(),
             explore_cache: RwLock::new(None),
             fonts_cache: RwLock::new(None),
             image_cache: RwLock::new(HashMap::new()),
+            lyrics: LyricsService::default(),
+            background: BackgroundStore::new(config_dir.join("background")),
+            album_cache: RwLock::new(HashMap::new()),
             oauth_pending: RwLock::new(HashMap::new()),
             port,
             static_dir,

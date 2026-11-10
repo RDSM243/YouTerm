@@ -1,13 +1,14 @@
 import React from 'react';
 import { ThemeConfig } from '../types';
-import { HelpCircle, Keyboard } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 
 interface HelpModalProps {
   theme: ThemeConfig;
   onClose: () => void;
+  embedded?: boolean;
 }
 
-export const HelpModal: React.FC<HelpModalProps> = ({ theme, onClose }) => {
+export const HelpModal: React.FC<HelpModalProps> = ({ theme, onClose, embedded = false }) => {
   const shortcuts = [
     { key: 'Space', desc: 'Toggle Play / Pause audio stream' },
     { key: 'j / ↓', desc: 'Move cursor down in tracklist' },
@@ -18,33 +19,32 @@ export const HelpModal: React.FC<HelpModalProps> = ({ theme, onClose }) => {
     { key: 'l', desc: 'Toggle Like / Favorite on current track' },
     { key: '/', desc: 'Focus instant Search bar' },
     { key: 'Tab', desc: 'Switch focus between Sidebar and Tracklist' },
-    { key: '1 - 5', desc: 'Switch Views: 1=Tracks, 2=Cover, 3=Split, 4=Visualizer, 5=CLI' },
+    { key: '1 - 4', desc: 'Switch views: 1=Tracks, 2=Cover, 3=Split, 4=Visualizer' },
     { key: 's', desc: 'Toggle Shuffle mode (randomize queue)' },
     { key: 'r', desc: 'Cycle Repeat mode (Off -> All -> One)' },
     { key: 'm', desc: 'Mute / Unmute audio volume' },
     { key: '+ / -', desc: 'Volume Up / Down by 5%' },
-    { key: 'h / l', desc: 'Seek Backward / Forward 5 seconds' },
+    { key: '[ / ]', desc: 'Seek backward / forward 5 seconds' },
     { key: 'Right-click / Menu / Shift+F10', desc: 'Context menu: play next, queue, add/remove from playlist, copy link and more' },
     { key: 'Click & Drag', desc: 'Drag and drop tracks to reorder in custom playlists' },
-    { key: 'a', desc: 'Add selected track to custom playlist' },
+    { key: 'Drag divider', desc: 'Resize the sidebar, artwork and lyrics panels. Double-click a divider to reset its size.' },
     { key: 't', desc: 'Cycle Unix color themes (Tokyo Night, Mint, CRT Green, Amber, Dracula, Nord...)' },
-    { key: ':', desc: 'Open interactive Command Prompt CLI' },
     { key: '?', desc: 'Toggle this Help & Keybindings window' },
     { key: 'Esc', desc: 'Close any active modal or return to tracklist' },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 font-mono select-none">
+    <div className={embedded ? '' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 font-mono select-none'}>
       <div
-        className="w-full max-w-2xl border p-5 shadow-2xl relative flex flex-col gap-4 text-xs max-h-[90vh] overflow-hidden"
-        style={{
+        className={embedded ? 'flex flex-col gap-4 text-xs' : 'w-full max-w-2xl border p-5 shadow-2xl relative flex flex-col gap-4 text-xs max-h-[90vh] overflow-hidden'}
+        style={embedded ? { color: theme.text } : {
           borderColor: theme.warning,
           backgroundColor: theme.cardBg,
           boxShadow: `0 0 30px rgba(245, 158, 11, 0.2)`,
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: theme.border }}>
+        {!embedded && <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: theme.border }}>
           <div className="flex items-center gap-2 font-bold text-sm" style={{ color: theme.highlight }}>
             <HelpCircle className="w-4 h-4" style={{ color: theme.warning }} />
             <span>┌─ YouTerm Keyboard Shortcuts & Manual ─</span>
@@ -56,10 +56,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ theme, onClose }) => {
           >
             [Esc / Close]
           </button>
-        </div>
+        </div>}
 
         {/* Shortcuts Grid */}
-        <div className="flex-1 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar">
+        <div className={embedded ? '' : 'flex-1 overflow-y-auto pr-1 space-y-1.5 custom-scrollbar'}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {shortcuts.map((item, idx) => (
               <div
@@ -88,7 +88,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ theme, onClose }) => {
           </div>
         </div>
 
-        <div className="flex justify-end pt-2 border-t" style={{ borderColor: theme.border }}>
+        {!embedded && <div className="flex justify-end pt-2 border-t" style={{ borderColor: theme.border }}>
           <button
             onClick={onClose}
             className="px-4 py-1 border font-bold hover:brightness-125"
@@ -100,7 +100,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ theme, onClose }) => {
           >
             Got it [Esc]
           </button>
-        </div>
+        </div>}
       </div>
     </div>
   );

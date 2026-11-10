@@ -1,5 +1,6 @@
-import { THEMES } from '../data/themes';
+import { DEFAULT_THEME_ID, THEMES } from '../data/themes';
 import type { AppearanceConfig, ThemeConfig, ThemeId } from '../types';
+import { DEFAULT_BACKGROUND, normalizeBackground } from './background';
 
 const CUSTOM_THEMES_KEY = 'youterm_custom_themes_v1';
 const APPEARANCE_KEY = 'youterm_appearance_v1';
@@ -27,7 +28,8 @@ export function getFontFamily(font: string): string {
 
 export const DEFAULT_APPEARANCE: AppearanceConfig = {
   font: 'system', fontSize: 12, density: 'compact', animations: true,
-  glow: true, scanlines: false, lowPower: true,
+  glow: true, scanlines: false, lowPower: true, hideAlbumCover: false,
+  background: { ...DEFAULT_BACKGROUND },
 };
 
 export function accentGlow(accent: string): string {
@@ -42,7 +44,7 @@ export function validateCustomTheme(value: unknown): ThemeConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Choose a valid YouTerm theme JSON file.');
   const input = value as Record<string, unknown>;
   if (typeof input.name !== 'string' || !input.name.trim() || input.name.length > 60) throw new Error('Theme name must contain 1–60 characters.');
-  const result = { ...THEMES.clean_minimalism, name: input.name.trim(),
+  const result = { ...THEMES[DEFAULT_THEME_ID], name: input.name.trim(),
     id: typeof input.id === 'string' && /^custom_[a-zA-Z0-9_-]{1,80}$/.test(input.id)
       ? input.id as ThemeId : `custom_${crypto.randomUUID()}` as ThemeId };
   for (const field of Object.keys(THEME_COLORS) as ThemeColor[]) {
@@ -93,7 +95,7 @@ export function saveCustomThemes(themes: ThemeConfig[]): void {
 }
 
 export function resolveTheme(id: ThemeId, customThemes: ThemeConfig[]): ThemeConfig {
-  return customThemes.find(theme => theme.id === id) || (Object.hasOwn(THEMES, id) ? THEMES[id as keyof typeof THEMES] : THEMES.clean_minimalism);
+  return customThemes.find(theme => theme.id === id) || (Object.hasOwn(THEMES, id) ? THEMES[id as keyof typeof THEMES] : THEMES[DEFAULT_THEME_ID]);
 }
 
 export function normalizeAppearance(value: unknown): AppearanceConfig {
@@ -108,9 +110,10 @@ export function normalizeAppearance(value: unknown): AppearanceConfig {
   }
   if (Number.isFinite(input.fontSize)) result.fontSize = Math.max(10, Math.min(18, Math.round(input.fontSize!)));
   if (input.density === 'comfortable' || input.density === 'compact') result.density = input.density;
-  for (const field of ['animations', 'glow', 'scanlines', 'lowPower'] as const) {
+  for (const field of ['animations', 'glow', 'scanlines', 'lowPower', 'hideAlbumCover'] as const) {
     if (typeof input[field] === 'boolean') result[field] = input[field];
   }
+  result.background = normalizeBackground(input.background);
   return result;
 }
 

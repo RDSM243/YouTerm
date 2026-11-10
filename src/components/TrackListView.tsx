@@ -262,8 +262,9 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
       {/* Background Cover Art Watermark (follows the render mode indicated on the cover screen) */}
       {showBackgroundAscii && (
         <div
+          data-album-watermark="" aria-hidden="true"
           className="absolute inset-0 pointer-events-none overflow-hidden opacity-30 flex items-center justify-end pr-8"
-          style={{ zIndex: 15 }}
+          style={{ zIndex: 0 }}
         >
           {asciiConfig?.mode === 'original_hd' ? (
             (coverArtworkUrl || currentTrack?.thumbnailUrl) ? (
@@ -272,7 +273,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                 alt={currentTrack?.title || 'Cover'}
                 className="max-h-[250px] max-w-[270px] object-contain shadow-2xl"
                 style={{
-                  filter: `drop-shadow(0 0 16px rgba(0,0,0,0.95)) contrast(${(asciiConfig?.contrast ?? 0) + 100}%) ${asciiConfig?.inverted ? 'invert(1)' : ''} ${asciiConfig && !asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
+                  filter: `drop-shadow(0 0 16px rgba(0,0,0,0.95)) contrast(${(asciiConfig?.contrast ?? 0) + 100}%) brightness(${100 + (asciiConfig?.brightness ?? 0) * 10}%) ${asciiConfig?.inverted ? 'invert(1)' : ''} ${asciiConfig && !asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
                 }}
               />
             ) : null
@@ -309,28 +310,28 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
         className="px-4 py-2 border-b flex items-center justify-between z-20 relative"
         style={{
           borderColor: theme.border,
-          backgroundColor: theme.cardBg,
+          backgroundColor: 'var(--app-surface-card-bg)',
         }}
       >
-        <div className="flex items-center gap-2 truncate">
-          <span className="font-bold text-xs" style={{ color: theme.highlight }}>
+        <div className="flex min-w-0 flex-1 items-center gap-2 truncate">
+          <span className="truncate font-bold text-xs" title={title} style={{ color: theme.highlight }}>
             ┌─ {title} {subtitle ? `— ${subtitle}` : ''} ─
           </span>
           <span className="text-xs opacity-60 hidden sm:inline">
             ({tracks.length} track{tracks.length === 1 ? '' : 's'} {tracks.length > 0 ? `| #${selectedTrackIndex + 1}` : ''})
           </span>
         </div>
-        <div className="flex items-center gap-2 text-xs flex-shrink-0">
+        <div className="flex min-w-0 max-w-[55%] items-center gap-2 text-xs">
           {dragIndex !== null && draggedTrack ? (
-            <span className="font-bold animate-pulse text-[11px]" style={{ color: theme.accent }}>
+            <span className="truncate font-bold animate-pulse text-[11px]" style={{ color: theme.accent }}>
               [ ⠿ Moving: "{draggedTrack.title}" → Release at #{targetIndex !== null ? targetIndex + 1 : dragIndex + 1} | Esc: Cancel ]
             </span>
           ) : isReorderable ? (
-            <span style={{ color: theme.textDim }} className="text-[11px]">
+            <span style={{ color: theme.textDim }} className="truncate text-[11px]" title="Drag with click to reorder | Enter: Play | Space: Pause | L: Like">
               [Drag with click to reorder | Enter: Play | Space: Pause | L: Like]
             </span>
           ) : (
-            <span style={{ color: theme.textDim }} className="text-[11px]">
+            <span style={{ color: theme.textDim }} className="truncate text-[11px]" title="j/k: Scroll & Select | Enter: Play | Space: Pause | L: Like">
               [j/k: Scroll & Select | Enter: Play | Space: Pause | L: Like]
             </span>
           )}
@@ -343,7 +344,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
         style={{
           borderColor: theme.border,
           color: theme.textDim,
-          backgroundColor: theme.bg,
+          backgroundColor: 'var(--app-surface-bg)',
         }}
       >
         <div className="col-span-1 text-center">#</div>
@@ -430,7 +431,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                     : isSelected
                     ? `${theme.highlight}22`
                     : isOriginDuringDrag
-                    ? `${theme.cardBg}`
+                    ? 'var(--app-surface-card-bg)'
                     : 'transparent',
                   color: isDropTarget ? theme.highlight : isCurrent ? theme.highlight : theme.text,
                   boxShadow: isDropTarget ? `0 0 16px ${theme.accentGlow || 'rgba(34, 197, 94, 0.4)'}` : undefined,
@@ -496,7 +497,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                       className="text-[9px] px-1.5 py-0.5 border uppercase tracking-wider font-bold animate-pulse flex-shrink-0"
                       style={{
                         borderColor: theme.accent,
-                        backgroundColor: theme.bg,
+                        backgroundColor: 'var(--app-surface-bg)',
                         color: theme.accent,
                       }}
                     >
@@ -519,8 +520,8 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                 </div>
 
                 {/* Duration & Quick Hover Actions */}
-                <div className="col-span-2 text-right flex items-center justify-end gap-1 relative z-20">
-                  <span className="text-[11px]" style={{ color: isDropTarget ? theme.accent : isCurrent ? theme.highlight : theme.textDim }}>
+                <div className="col-span-2 min-w-0 text-right flex items-center justify-end relative z-20">
+                  <span className="text-[11px] group-hover:opacity-0 group-focus-within:opacity-0" style={{ color: isDropTarget ? theme.accent : isCurrent ? theme.highlight : theme.textDim }}>
                     {track.duration && track.duration !== 210
                       ? formatSeconds(track.duration)
                       : track.durationFormatted && track.durationFormatted !== '3:30'
@@ -531,7 +532,8 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                   </span>
 
                   {/* Hover Buttons */}
-                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 ml-1 transition-opacity">
+                  <div className="absolute inset-y-0 right-0 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto flex items-center gap-1 transition-opacity"
+                    style={{ backgroundColor: 'var(--app-surface-bg)' }}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -571,7 +573,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
           style={{
             left: `${cursorPos.x + 14}px`,
             top: `${cursorPos.y + 14}px`,
-            backgroundColor: theme.cardBg,
+            backgroundColor: 'var(--app-surface-card-bg)',
             borderColor: theme.accent,
             color: theme.highlight,
             boxShadow: `0 0 20px ${theme.accentGlow || 'rgba(34, 197, 94, 0.45)'}`,
@@ -580,7 +582,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
           <GripVertical className="w-3.5 h-3.5 flex-shrink-0" style={{ color: theme.accent }} />
           <span
             className="font-bold px-1.5 py-0.5 border text-[10px]"
-            style={{ borderColor: theme.border, color: theme.accent, backgroundColor: theme.bg }}
+            style={{ borderColor: theme.border, color: theme.accent, backgroundColor: 'var(--app-surface-bg)' }}
           >
             #{targetIndex !== null ? targetIndex + 1 : dragIndex + 1}
           </span>

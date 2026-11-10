@@ -1,10 +1,11 @@
 import React, { useRef, useState, useEffect } from 'react';
-import type { AppearanceConfig, ThemeConfig, ThemeId } from '../types';
+import type { AppearanceConfig, BackgroundConfig, ThemeConfig, ThemeId } from '../types';
+import { BackgroundSettings } from './BackgroundSettings';
 import { THEMES } from '../data/themes';
 import { Check, Download, Palette, Plus, Upload, ChevronDown } from 'lucide-react';
 import { accentGlow, cloneTheme, DEFAULT_APPEARANCE, exportThemeJson, importThemeJson, THEME_COLORS, validateCustomTheme, type ThemeColor } from '../services/themeStorage';
 
-interface ThemeModalProps {
+export interface ThemeModalProps {
   currentTheme: ThemeConfig;
   customThemes: ThemeConfig[];
   appearance: AppearanceConfig;
@@ -12,14 +13,18 @@ interface ThemeModalProps {
   onSaveCustomTheme: (theme: ThemeConfig) => void;
   onDeleteCustomTheme: (themeId: ThemeId) => void;
   onChangeAppearance: (appearance: AppearanceConfig) => void;
+  onChangeBackground: (change: Partial<BackgroundConfig>) => void;
   onClose: () => void;
+  embedded?: boolean;
+  section?: 'themes' | 'appearance';
 }
 
 export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThemes, appearance,
-  onSelectTheme, onSaveCustomTheme, onDeleteCustomTheme, onChangeAppearance, onClose }) => {
+  onSelectTheme, onSaveCustomTheme, onDeleteCustomTheme, onChangeAppearance, onChangeBackground, onClose, embedded = false, section }) => {
   const [draft, setDraft] = useState<ThemeConfig | null>(null);
   const [status, setStatus] = useState('');
-  const [tab, setTab] = useState<'themes' | 'appearance'>('themes');
+  const [selectedTab, setTab] = useState<'themes' | 'appearance'>('themes');
+  const tab = section || selectedTab;
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -61,25 +66,25 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 font-mono">
-      <div role="dialog" aria-modal="true" aria-label="Themes and personalization"
-        className="w-full max-w-3xl border p-5 shadow-2xl flex flex-col gap-4 text-xs max-h-[90vh] overflow-hidden"
-        style={{ borderColor: theme.accent, backgroundColor: theme.cardBg, color: theme.text, boxShadow: `0 0 30px ${theme.accentGlow}` }}>
-        <div className="flex items-center justify-between border-b pb-3 gap-2" style={{ borderColor: theme.border }}>
+    <div className={embedded ? '' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 font-mono'}>
+      <div role={embedded ? undefined : 'dialog'} aria-modal={embedded ? undefined : true} aria-label={embedded ? undefined : 'Themes and personalization'}
+        className={embedded ? 'flex flex-col gap-4 text-xs' : 'w-full max-w-3xl border p-5 shadow-2xl flex flex-col gap-4 text-xs max-h-[90vh] overflow-hidden'}
+        style={embedded ? { color: theme.text } : { borderColor: theme.accent, backgroundColor: theme.cardBg, color: theme.text, boxShadow: `0 0 30px ${theme.accentGlow}` }}>
+        {!embedded && <div className="flex items-center justify-between border-b pb-3 gap-2" style={{ borderColor: theme.border }}>
           <span className="flex items-center gap-2 font-bold text-sm" style={{ color: theme.highlight }}>
             <Palette className="w-4 h-4" style={{ color: theme.accent }} /> Themes & Personalization
           </span>
           <button onClick={onClose} className={buttonClass} style={panelStyle}>[Esc / Close]</button>
-        </div>
-        <div className="flex gap-2 flex-wrap">
+        </div>}
+        {!embedded && <div className="flex gap-2 flex-wrap">
           {(['themes', 'appearance'] as const).map(value => (
             <button key={value} onClick={() => { setTab(value); setStatus(''); }} className={buttonClass}
               style={{ ...panelStyle, borderColor: tab === value ? theme.accent : theme.border, color: tab === value ? theme.accent : theme.text }}>
               {value === 'themes' ? 'Themes' : 'Appearance & Performance'}
             </button>
           ))}
-        </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 min-h-0">
+        </div>}
+        <div className={embedded ? '' : 'flex-1 overflow-y-auto custom-scrollbar pr-1 min-h-0'}>
           {tab === 'themes' ? (
             <div className="flex flex-col gap-4">
               <div className="flex gap-2 flex-wrap">
@@ -144,7 +149,6 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
                       </span>
                       <span className="flex gap-1.5">{[value.accent, value.highlight, value.text, value.warning].map((color, index) =>
                         <span key={index} className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />)}</span>
-                      <span className="truncate text-[10px] w-full" style={{ color: value.accent }}>{value.promptSymbol} cat album_art.ansi</span>
                     </button>
                     {value.id.startsWith('custom_') && <div className="flex gap-3 px-3 pb-2 text-[10px]" style={{ color: value.textDim }}>
                       <button onClick={() => { setDraft({ ...value }); setStatus(''); }}>Edit</button>
@@ -157,6 +161,7 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
             </div>
           ) : (
             <div className="flex flex-col gap-4">
+              <BackgroundSettings theme={theme} config={appearance.background} onChange={onChangeBackground} />
               <label className="flex flex-col gap-1.5">
                 <span className="text-[11px] font-bold" style={{ color: theme.textDim }}>Font (uses fonts installed on your system)</span>
                 <div className="relative flex items-center">
@@ -206,11 +211,12 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
                 ['scanlines', 'CRT scanlines', 'Add a retro scanline overlay.'],
               ] as const).map(([field, label, description]) => (
                 <label key={field} className="flex items-start gap-3 border p-3 cursor-pointer" style={panelStyle}>
-                  <input type="checkbox" className="mt-0.5" checked={appearance[field]} onChange={event => updateAppearance({ [field]: event.target.checked })} />
+                  <input type="checkbox" className="mt-0.5" style={{ accentColor: theme.accent }} checked={appearance[field]} onChange={event => updateAppearance({ [field]: event.target.checked })} />
                   <span><span className="block font-bold">{label}</span><span className="block mt-1 text-[10px]" style={{ color: theme.textDim }}>{description}</span></span>
                 </label>
               ))}
-              <button className={`${buttonClass} self-start`} style={panelStyle} onClick={() => updateAppearance(DEFAULT_APPEARANCE)}>Reset appearance</button>
+              <button className={`${buttonClass} self-start`} style={panelStyle} onClick={() => updateAppearance({ ...DEFAULT_APPEARANCE,
+                background: { ...DEFAULT_APPEARANCE.background, imageRevision: appearance.background.imageRevision, imageName: appearance.background.imageName } })}>Reset appearance</button>
             </div>
           )}
         </div>

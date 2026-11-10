@@ -67,6 +67,8 @@ pub struct Track {
     pub title: String,
     pub artist: String,
     pub album: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub album_id: Option<String>,
     pub thumbnail_url: String,
     pub youtube_id: String,
     pub duration: u32,

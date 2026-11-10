@@ -1,0 +1,89 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build:
+    if: github.event_name == 'workflow_dispatch' || (github.event.label.name == 'build-windows' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: '0'
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup default stable
+          rustc --version
+
+      - name: Install frontend dependencies
+        run: npm install --no-package-lock --no-audit --no-fund
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git/db
+            src-tauri/target
+          key: windows-msvc-${{ hashFiles('src-tauri/Cargo.lock', 'src-tauri/Cargo.toml') }}
+
+      - name: Check and build frontend
+        run: |
+          npx tsc --noEmit
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+
+      - name: Run Windows backend tests
+        run: cargo test --locked --release --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml
+
+      - name: Build Windows installer and portable ZIP
+        run: ./scripts/package-windows.ps1
+
+      - name: Validate portable package and installed application
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          ./scripts/check-windows.ps1 `
+            -Package "build/releases/YouTerm-$version-windows-x64.zip" `
+            -Installer "build/releases/YouTerm-$version-windows-x64-setup.exe" `
+            -TestRoot (Join-Path $env:RUNNER_TEMP 'youterm-package-check')
+
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: YouTerm-windows-x64
+          path: |
+            build/releases/*-windows-x64-setup.exe
+            build/releases/*-windows-x64.zip
+            build/releases/SHA256SUMS-windows.txt
+          if-no-files-found: error
+
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: YouTerm-windows-validation
+          path: ${{ runner.temp }}/youterm-package-check/*.log
+          if-no-files-found: ignore

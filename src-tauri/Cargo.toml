@@ -1,6 +1,6 @@
 [package]
 name = "youterm"
-version = "0.2.0"
+version = "0.2.5"
 description = "YouTerm - High-performance YouTube Music desktop player (Tauri v2 + Rust)"
 authors = ["YouTerm"]
 license = "GPL-3.0-only"

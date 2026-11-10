@@ -3,6 +3,7 @@ export interface Track {
   title: string;
   artist: string;
   album: string;
+  albumId?: string;
   duration: number; // in seconds
   durationFormatted?: string;
   thumbnailUrl: string;
@@ -55,14 +56,19 @@ export type LibraryCategory =
   | 'podcasts'
   | 'explore';
 
+export interface SidebarPreferences {
+  showLibrary: boolean;
+  showPlaylists: boolean;
+  libraryItems: Record<LibraryCategory, boolean>;
+  libraryExpanded: boolean;
+  playlistsExpanded: boolean;
+}
+
 export type TuiViewMode =
   | 'tracklist'
   | 'ascii_cover'
   | 'split'
-  | 'visualizer'
-  | 'lyrics'
-  | 'cli'
-  | 'export_script';
+  | 'visualizer';
 
 export type AsciiRenderMode =
   | 'half_block'    // ANSI Half-Block (24-bit TrueColor) ▀
@@ -82,9 +88,22 @@ export type BuiltinThemeId =
   | 'monokai'
   | 'cyberpunk'
   | 'solarized_dark'
-  | 'gruvbox';
+  | 'gruvbox'
+  | 'crimson_moon';
 
 export type ThemeId = BuiltinThemeId | `custom_${string}`;
+
+export interface BackgroundConfig {
+  enabled: boolean;
+  imageRevision: string;
+  imageName: string;
+  brightness: number;
+  darkness: number;
+  panelOpacity: number;
+  showInSidebar: boolean;
+  showInPlayer: boolean;
+  showInSpectrum: boolean;
+}
 
 export interface AppearanceConfig {
   font: string;
@@ -94,6 +113,8 @@ export interface AppearanceConfig {
   glow: boolean;
   scanlines: boolean;
   lowPower: boolean;
+  hideAlbumCover: boolean;
+  background: BackgroundConfig;
 }
 
 export interface ThemeConfig {

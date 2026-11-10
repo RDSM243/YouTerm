@@ -37,6 +37,41 @@ body {
   scrollbar-color: rgba(255, 255, 255, 0.25) rgba(0, 0, 0, 0.35);
 }
 
+.resize-handle {
+  position: relative;
+  flex: 0 0 6px;
+  touch-action: none;
+  outline: none;
+  z-index: 20;
+}
+
+.resize-handle[data-direction="row"] { cursor: col-resize; }
+.resize-handle[data-direction="column"] { cursor: row-resize; }
+
+.resize-handle::before,
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  background: var(--resize-border);
+}
+
+.resize-handle[data-direction="row"]::before { inset: 0 auto 0 2px; width: 1px; }
+.resize-handle[data-direction="column"]::before { inset: 2px 0 auto; height: 1px; }
+.resize-handle[data-direction="row"]::after { top: calc(50% - 12px); left: 1px; width: 3px; height: 24px; }
+.resize-handle[data-direction="column"]::after { left: calc(50% - 12px); top: 1px; width: 24px; height: 3px; }
+
+.resize-handle:hover::before,
+.resize-handle:hover::after,
+.resize-handle:focus-visible::before,
+.resize-handle:focus-visible::after,
+.resize-handle[data-dragging="true"]::before,
+.resize-handle[data-dragging="true"]::after { background: var(--resize-accent); }
+
+html[data-panel-resizing="row"] *,
+html[data-panel-resizing="row"] { cursor: col-resize !important; user-select: none !important; }
+html[data-panel-resizing="column"] *,
+html[data-panel-resizing="column"] { cursor: row-resize !important; user-select: none !important; }
+
 /* Optional CRT Scanlines Effect */
 .crt-scanlines {
   background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
