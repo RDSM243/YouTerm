@@ -1,14 +1,19 @@
 import React, { useRef, useState, useEffect } from 'react';
-import type { AppearanceConfig, BackgroundConfig, ThemeConfig, ThemeId } from '../types';
+import type { AppearanceConfig, AsciiRenderMode, BackgroundConfig, PlayerSkin, ThemeConfig, ThemeId, TuiViewMode } from '../types';
 import { BackgroundSettings } from './BackgroundSettings';
+import { SkinSettings } from './SkinSettings';
 import { THEMES } from '../data/themes';
 import { Check, Download, Palette, Plus, Upload, ChevronDown } from 'lucide-react';
-import { accentGlow, cloneTheme, DEFAULT_APPEARANCE, exportThemeJson, importThemeJson, THEME_COLORS, validateCustomTheme, type ThemeColor } from '../services/themeStorage';
+import { accentGlow, cloneTheme, DEFAULT_APPEARANCE, exportThemeJson, importThemeBundleJson, THEME_COLORS, validateCustomTheme, type ThemeColor } from '../services/themeStorage';
 
 export interface ThemeModalProps {
   currentTheme: ThemeConfig;
   customThemes: ThemeConfig[];
   appearance: AppearanceConfig;
+  viewMode: TuiViewMode;
+  artworkMode: AsciiRenderMode;
+  onApplySkin: (skin: PlayerSkin) => void;
+  onEditLayout: () => void;
   onSelectTheme: (themeId: ThemeId) => void;
   onSaveCustomTheme: (theme: ThemeConfig) => void;
   onDeleteCustomTheme: (themeId: ThemeId) => void;
@@ -20,7 +25,7 @@ export interface ThemeModalProps {
 }
 
 export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThemes, appearance,
-  onSelectTheme, onSaveCustomTheme, onDeleteCustomTheme, onChangeAppearance, onChangeBackground, onClose, embedded = false, section }) => {
+  viewMode, artworkMode, onApplySkin, onEditLayout, onSelectTheme, onSaveCustomTheme, onDeleteCustomTheme, onChangeAppearance, onChangeBackground, onClose, embedded = false, section }) => {
   const [draft, setDraft] = useState<ThemeConfig | null>(null);
   const [status, setStatus] = useState('');
   const [selectedTab, setTab] = useState<'themes' | 'appearance'>('themes');
@@ -49,7 +54,7 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
   };
   const saveTheme = (value: ThemeConfig) => {
     try {
-      const valid = validateCustomTheme(value);
+      const valid = validateCustomTheme({ ...value, look: { appearance, viewMode, artworkMode } });
       onSaveCustomTheme(valid);
       setDraft(null);
       setStatus(`Theme “${valid.name}” saved and applied.`);
@@ -57,10 +62,10 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
   };
   const exportTheme = () => {
     const value = draft || currentTheme;
-    const url = URL.createObjectURL(new Blob([exportThemeJson(value)], { type: 'application/json' }));
+    const url = URL.createObjectURL(new Blob([exportThemeJson(value, { appearance, viewMode, artworkMode })], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'youterm'}.theme.json`;
+    link.download = `${value.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'youterm'}.skin.json`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
@@ -89,12 +94,12 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
             <div className="flex flex-col gap-4">
               <div className="flex gap-2 flex-wrap">
                 <button className={`${buttonClass} flex items-center gap-1.5`} style={panelStyle}
-                  onClick={() => { setDraft(cloneTheme(currentTheme)); setStatus(''); }}><Plus className="w-3 h-3" /> Create theme</button>
+                  onClick={() => { setDraft(cloneTheme(currentTheme)); setStatus(''); }}><Plus className="w-3 h-3" /> Save current look</button>
                 <button className={`${buttonClass} flex items-center gap-1.5`} style={panelStyle} onClick={() => importRef.current?.click()}>
                   <Upload className="w-3 h-3" /> Import JSON
                 </button>
                 <button className={`${buttonClass} flex items-center gap-1.5`} style={panelStyle} onClick={exportTheme}>
-                  <Download className="w-3 h-3" /> Export theme
+                  <Download className="w-3 h-3" /> Export skin
                 </button>
                 <input ref={importRef} aria-label="Import theme JSON" type="file" accept=".json,application/json" className="hidden"
                   onChange={async event => {
@@ -103,11 +108,20 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
                     if (!file) return;
                     try {
                       if (file.size > 64 * 1024) throw new Error('Theme files must be smaller than 64 KB.');
-                      const imported = importThemeJson(await file.text());
-                      saveTheme({ ...imported, id: cloneTheme(imported).id });
+                      const imported = importThemeBundleJson(await file.text());
+                      const importedTheme = { ...imported.theme, id: cloneTheme(imported.theme).id };
+                      if (imported.skin) {
+                        onApplySkin({ ...imported.skin, theme: importedTheme,
+                          appearance: { ...imported.skin.appearance, lowPower: appearance.lowPower,
+                            background: { ...imported.skin.appearance.background,
+                              imageRevision: appearance.background.imageRevision, imageName: appearance.background.imageName,
+                              enabled: imported.skin.appearance.background.enabled && !!appearance.background.imageRevision } } });
+                        setDraft(null); setStatus(`Skin “${importedTheme.name}” imported and applied.`);
+                      } else saveTheme(importedTheme);
                     } catch (error) { setStatus(error instanceof Error ? error.message : 'Could not import this theme.'); }
                   }} />
               </div>
+              <p className="text-[11px]" style={{ color: theme.textDim }}>Save current look keeps your colors, fonts, shapes, layout and effects together. Export skin shares them as JSON. Background image files stay on this device. Older color themes can still be imported.</p>
               {draft && (
                 <form className="border p-3 flex flex-col gap-3" style={panelStyle} onSubmit={event => { event.preventDefault(); saveTheme(draft); }}>
                   <label className="flex flex-col gap-1">Theme name
@@ -161,6 +175,9 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
             </div>
           ) : (
             <div className="flex flex-col gap-4">
+              <SkinSettings theme={theme} appearance={appearance} viewMode={viewMode} artworkMode={artworkMode}
+                onEditLayout={onEditLayout}
+                onChangeAppearance={onChangeAppearance} onApplySkin={onApplySkin} />
               <BackgroundSettings theme={theme} config={appearance.background} onChange={onChangeBackground} />
               <label className="flex flex-col gap-1.5">
                 <span className="text-[11px] font-bold" style={{ color: theme.textDim }}>Font (uses fonts installed on your system)</span>
@@ -168,6 +185,7 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
                   <select aria-label="Interface font" className="w-full border p-2 pr-8 appearance-none outline-none font-mono text-xs cursor-pointer" style={panelStyle} value={appearance.font}
                     onChange={event => updateAppearance({ font: event.target.value })}>
                     <option value="system" style={{ backgroundColor: theme.bg, color: theme.text }}>System monospace (Default)</option>
+                    <option value="sans" style={{ backgroundColor: theme.bg, color: theme.text }}>System sans-serif</option>
                     {systemFonts.length > 0 ? (
                       systemFonts.map(fontName => (
                         <option key={fontName} value={fontName} style={{ backgroundColor: theme.bg, color: theme.text, fontFamily: `"${fontName}", monospace` }}>
@@ -207,7 +225,7 @@ export const ThemeModal: React.FC<ThemeModalProps> = ({ currentTheme, customThem
               {([
                 ['lowPower', 'Low power mode', 'Limit background track preparation and render the spectrum at up to 15 FPS.'],
                 ['animations', 'Interface animations', 'Animate transitions and playback indicators.'],
-                ['glow', 'Accent glow', 'Show terminal glow and shadows.'],
+                ['glow', 'Accent glow', 'Show the accent glow around dialogs and highlights. Panel shadows have their own setting above.'],
                 ['scanlines', 'CRT scanlines', 'Add a retro scanline overlay.'],
               ] as const).map(([field, label, description]) => (
                 <label key={field} className="flex items-start gap-3 border p-3 cursor-pointer" style={panelStyle}>

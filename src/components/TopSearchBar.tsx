@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
-import { ThemeConfig, UserSession } from '../types';
-import { Search, LogIn, Settings } from 'lucide-react';
+import { ThemeConfig, TuiViewMode, UserSession } from '../types';
+import { Search, LogIn, Settings, LayoutDashboard } from 'lucide-react';
 
 interface TopSearchBarProps {
   theme: ThemeConfig;
@@ -12,7 +12,12 @@ interface TopSearchBarProps {
   onOpenAuth: () => void;
   onOpenSettings: () => void;
   isModalOpen: boolean;
-  isSearching: boolean;
+  compactNavigation?: boolean;
+  viewMode: TuiViewMode;
+  onChangeViewMode: (view: TuiViewMode) => void;
+  onEditLayout: () => void;
+  isLayoutEditing: boolean;
+  hasCustomLayout: boolean;
 }
 
 export const TopSearchBar: React.FC<TopSearchBarProps> = ({
@@ -25,7 +30,12 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   onOpenAuth,
   onOpenSettings,
   isModalOpen,
-  isSearching,
+  compactNavigation = false,
+  viewMode,
+  onChangeViewMode,
+  onEditLayout,
+  isLayoutEditing,
+  hasCustomLayout,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -48,7 +58,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
 
   return (
     <div
-      className="flex items-center justify-between gap-2 px-3 py-1.5 border-b text-xs select-none"
+      className="app-search skin-panel flex shrink-0 items-center justify-between gap-2 px-3 py-1.5 border-b text-xs select-none"
       style={{
         borderColor: theme.border,
         backgroundColor: 'var(--app-surface-card-bg)',
@@ -61,7 +71,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
           <span>Search:</span>
         </span>
         <div
-          className="min-w-0 flex-1 flex items-center px-2 py-0.5 border rounded-none transition-colors"
+          className="skin-field min-w-0 flex-1 flex items-center px-2 py-0.5 border rounded-none transition-colors"
           style={{
             borderColor: theme.border,
             backgroundColor: theme.bg,
@@ -91,6 +101,19 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
 
       {/* Right Quick Action Status Badges */}
       <div className="flex shrink-0 items-center gap-1.5">
+        <button type="button" aria-label="Edit layout" disabled={isLayoutEditing || isModalOpen} onClick={onEditLayout}
+          className="flex items-center gap-1 border px-2 py-1 text-[11px] disabled:opacity-40"
+          style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.accent }} title="Arrange panels by dragging">
+          <LayoutDashboard className="h-3.5 w-3.5" /><span className="hidden sm:inline">Edit layout</span>
+        </button>
+        {compactNavigation && <select aria-label="Player view" value={viewMode}
+          disabled={isLayoutEditing}
+          onChange={event => onChangeViewMode(event.target.value as TuiViewMode)}
+          className="max-w-28 border px-2 py-1 text-[11px]" style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text }}>
+          <option value="tracklist">Tracks</option><option value="ascii_cover">Cover</option>
+          <option value="split">Split view</option><option value="visualizer">Spectrum</option>
+          {hasCustomLayout && <option value="custom">Custom layout</option>}
+        </select>}
         {/* Loading Indicator */}
         {isLoading ? (
           <div
@@ -102,16 +125,6 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
             }}
           >
             [ Loading... ]
-          </div>
-        ) : isSearching ? (
-          <div
-            className="px-2 py-0.5 border text-[11px]"
-            style={{
-              borderColor: theme.accent,
-              color: theme.accent,
-            }}
-          >
-            [ Search Active ]
           </div>
         ) : null}
 
@@ -133,6 +146,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
         <button
           type="button"
           onClick={onOpenSettings}
+          disabled={isLayoutEditing}
           aria-label="Open settings"
           aria-haspopup="dialog"
           className="p-1 border flex items-center justify-center hover:brightness-125 transition-all"

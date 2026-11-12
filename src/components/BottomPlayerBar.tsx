@@ -1,10 +1,12 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { PlayerState, ThemeConfig } from '../types';
+import { PlayerState, SkinConfig, ThemeConfig } from '../types';
 import { Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Volume2, VolumeX, Heart, Eye, Loader2 } from 'lucide-react';
 
 interface BottomPlayerBarProps {
   theme: ThemeConfig;
   showBackground?: boolean;
+  progressStyle?: SkinConfig['progressStyle'];
+  controlStyle?: SkinConfig['controlStyle'];
   playerState: PlayerState;
   onTogglePlay: () => void;
   onNext: () => void;
@@ -22,6 +24,8 @@ interface BottomPlayerBarProps {
 export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
   theme,
   showBackground = false,
+  progressStyle = 'ascii',
+  controlStyle = 'terminal',
   playerState,
   onTogglePlay,
   onNext,
@@ -78,7 +82,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
         cleanupDragRef.current();
       }
     };
-  }, []);
+  }, [progressStyle]);
 
   useEffect(() => {
     const container = barContainerRef.current;
@@ -99,7 +103,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
     const observer = new ResizeObserver(updateBlocks);
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [progressStyle]);
 
   const getTimeFromClientX = useCallback(
     (clientX: number): number => {
@@ -182,7 +186,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
   return (
     <footer
       data-background-region="player" data-background-enabled={showBackground}
-      className="border-t select-none font-mono text-xs z-20 flex flex-col"
+      className="app-player skin-panel shrink-0 border-t select-none font-mono text-xs z-20 flex flex-col"
       style={{
         borderColor: theme.border,
         backgroundColor: showBackground ? 'transparent' : theme.bg,
@@ -191,9 +195,9 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
     >
 
       {/* Main Player Row */}
-      <div className="p-3 flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="player-row p-3 flex flex-col items-center justify-between gap-3">
         {/* Left: Current Track Details */}
-        <div className="flex items-center gap-3 w-full md:w-1/3 min-w-0">
+        <div className="player-track flex items-center gap-3 w-full min-w-0">
           {currentTrack ? (
             <>
               {/* Like Heart Button */}
@@ -234,7 +238,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
         </div>
 
         {/* Center: Interactive ASCII Progress Bar */}
-        <div className="flex-1 w-full max-w-xl flex flex-col gap-1 items-center">
+        <div className="player-timeline flex-1 min-w-0 w-full max-w-xl flex flex-col gap-1 items-center">
           {/* Controls button row */}
           <div className="flex items-center gap-3">
             {/* Shuffle */}
@@ -260,28 +264,29 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
             {/* Play/Pause */}
             <button
               onClick={onTogglePlay}
-              className="px-2.5 py-1 border hover:brightness-125 transition-all font-bold flex items-center gap-1.5"
+              className="play-toggle px-2.5 py-1 border hover:brightness-125 transition-all font-bold flex items-center justify-center gap-1.5"
+              aria-label={isBuffering ? 'Buffering' : isPlaying ? 'Pause' : 'Play'}
               title="Play/Pause [Space]"
               style={{
                 borderColor: theme.accent,
-                backgroundColor: 'var(--app-surface-card-bg)',
-                color: theme.highlight,
+                backgroundColor: controlStyle === 'minimal' ? theme.accent : 'var(--app-surface-card-bg)',
+                color: controlStyle === 'minimal' ? theme.bg : theme.highlight,
               }}
             >
               {isBuffering ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>BUFFERING</span>
+                  {controlStyle === 'terminal' && <span>BUFFERING</span>}
                 </>
               ) : isPlaying ? (
                 <>
                   <Pause className="w-3.5 h-3.5 fill-current" />
-                  <span>PAUSE</span>
+                  {controlStyle === 'terminal' && <span>PAUSE</span>}
                 </>
               ) : (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>PLAY</span>
+                  {controlStyle === 'terminal' && <span>PLAY</span>}
                 </>
               )}
             </button>
@@ -311,7 +316,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
           {/* Hidden element to measure character width accurately */}
           <span
             ref={measureRef}
-            className="invisible absolute -top-[9999px] left-0 font-mono text-[11px] tracking-wider pointer-events-none select-none"
+            className="ascii-progress invisible absolute -top-[9999px] left-0 font-mono text-[11px] tracking-wider pointer-events-none select-none"
             aria-hidden="true"
           >
             █
@@ -328,25 +333,29 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
             </span>
 
             {/* Visual ASCII Bar */}
-            <div
+            {progressStyle === 'continuous' ? <input type="range" aria-label="Playback progress"
+              min={0} max={Math.max(0, duration)} step={0.1} value={Math.max(0, Math.min(duration, displayTime))}
+              disabled={duration <= 0} aria-valuetext={`${formatTime(displayTime)} of ${formatTime(duration)}`}
+              className="min-w-0 flex-1 cursor-pointer disabled:opacity-40"
+              onChange={event => onSeek(Number(event.target.value))} /> : <div
               ref={barContainerRef}
               onMouseDown={handleMouseDown}
               onMouseEnter={() => setIsHovered(true)}
               onMouseMove={handleMouseMoveBar}
               onMouseLeave={handleMouseLeaveBar}
               title={duration > 0 && hoverTime !== null ? `Seek: ${formatTime(hoverTime)}` : undefined}
-              className={`flex-1 border px-2 py-0.5 font-mono text-[11px] tracking-wider text-center select-none transition-colors overflow-hidden truncate ${duration > 0 ? 'cursor-pointer' : 'cursor-default'
+              className={`ascii-progress flex-1 border px-2 py-0.5 font-mono text-[11px] tracking-wider text-center select-none transition-colors overflow-hidden truncate ${duration > 0 ? 'cursor-pointer' : 'cursor-default'
                 }`}
               style={{
                 borderColor: isHovered || isDragging ? theme.accent : theme.border,
-                backgroundColor: '#070a0c',
+                backgroundColor: 'var(--app-surface-bg)',
               }}
             >
               <span ref={barTextRef}>
                 <span style={{ color: theme.highlight }}>[{asciiBar.slice(0, filledBlocks)}</span>
                 <span style={{ color: theme.textDim }}>{asciiBar.slice(filledBlocks)}]</span>
               </span>
-            </div>
+            </div>}
 
             {/* Total / Remaining Time */}
             <span
@@ -360,7 +369,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
         </div>
 
         {/* Right: Volume Slider & Shortcut hints */}
-        <div className="flex items-center justify-end gap-3 w-full md:w-1/3">
+        <div className="player-volume flex items-center justify-end gap-3 w-full">
           <div className="flex items-center gap-2">
             <button
               onClick={onToggleMute}
@@ -372,6 +381,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
             </button>
             <input
               type="range"
+              aria-label="Volume"
               min="0"
               max="100"
               value={isMuted ? 0 : volume}

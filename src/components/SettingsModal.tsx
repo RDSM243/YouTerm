@@ -10,8 +10,8 @@ import { ThemeModal, type ThemeModalProps } from './ThemeModal';
 
 const TABS = [
   { id: 'general', label: 'General', icon: LayoutPanelLeft, description: 'Album artwork and sidebar sections.' },
-  { id: 'appearance', label: 'Appearance', icon: Sliders, description: 'Background, fonts, effects and performance.' },
-  { id: 'themes', label: 'Themes', icon: Palette, description: 'Choose a theme or create your own terminal colors.' },
+  { id: 'appearance', label: 'Appearance', icon: Sliders, description: 'Skins, shapes, layout, background, fonts and effects.' },
+  { id: 'themes', label: 'Themes', icon: Palette, description: 'Customize colors or import and export a complete skin.' },
   { id: 'playback', label: 'Playback', icon: Volume2, description: 'Playback volume, mute and audio format.' },
   { id: 'account', label: 'Account', icon: User, description: 'Connect to YouTube Music and manage library sync.' },
   { id: 'help', label: 'Help', icon: HelpCircle, description: 'Keyboard shortcuts for playback and navigation.' },

@@ -68,7 +68,8 @@ export type TuiViewMode =
   | 'tracklist'
   | 'ascii_cover'
   | 'split'
-  | 'visualizer';
+  | 'visualizer'
+  | 'custom';
 
 export type AsciiRenderMode =
   | 'half_block'    // ANSI Half-Block (24-bit TrueColor) ▀
@@ -115,6 +116,39 @@ export interface AppearanceConfig {
   lowPower: boolean;
   hideAlbumCover: boolean;
   background: BackgroundConfig;
+  skin: SkinConfig;
+}
+
+export interface SkinConfig {
+  panelRadius: number;
+  controlRadius: number;
+  artworkRadius: number;
+  panelGap: number;
+  borderWidth: number;
+  shadow: 'none' | 'soft' | 'deep';
+  sidebar: 'left' | 'right' | 'hidden';
+  playerPosition: 'bottom' | 'top';
+  controlStyle: 'terminal' | 'minimal';
+  progressStyle: 'ascii' | 'continuous';
+  showHeader: boolean;
+  layout: DockLayout | null;
+}
+
+export type DockPanelId = 'sidebar' | 'tracks' | 'artwork' | 'lyrics' | 'spectrum' | 'player';
+export type DockPosition = 'left' | 'right' | 'top' | 'bottom' | 'center';
+export type DockNode = { type: 'panel'; panel: DockPanelId } | {
+  type: 'split'; id: string; axis: 'row' | 'column'; ratio: number; first: DockNode; second: DockNode;
+};
+export interface DockLayout { version: 1; root: DockNode; }
+
+export interface SkinSnapshot {
+  appearance: AppearanceConfig;
+  viewMode: TuiViewMode;
+  artworkMode: AsciiRenderMode;
+}
+
+export interface PlayerSkin extends SkinSnapshot {
+  theme: ThemeConfig;
 }
 
 export interface ThemeConfig {
@@ -132,6 +166,7 @@ export interface ThemeConfig {
   error: string;
   promptSymbol: string;
   hostname: string;
+  look?: SkinSnapshot;
 }
 
 export interface PlayerState {

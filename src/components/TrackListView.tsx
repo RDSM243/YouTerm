@@ -258,7 +258,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
   }, [onContextMenu, tracks, selectedTrackIndex]);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden select-none">
+    <div className="skin-panel flex-1 flex flex-col min-h-0 relative overflow-hidden select-none" style={{ backgroundColor: 'var(--app-surface-bg)' }}>
       {/* Background Cover Art Watermark (follows the render mode indicated on the cover screen) */}
       {showBackgroundAscii && (
         <div
@@ -423,7 +423,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                 style={{
                   borderColor: isDropTarget ? theme.accent : 'rgba(255, 255, 255, 0.04)',
                   borderStyle: isDropTarget ? 'dashed' : 'solid',
-                  borderWidth: isDropTarget ? '2px' : '0 0 1px 0',
+                  borderWidth: isDropTarget ? '2px' : '0 0 var(--skin-border-width, 1px) 0',
                   backgroundColor: isDropTarget
                     ? `${theme.accent}33`
                     : isCurrent

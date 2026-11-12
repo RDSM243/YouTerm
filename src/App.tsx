@@ -4,10 +4,13 @@ import {
   Album,
   AppearanceConfig,
   BackgroundConfig,
+  DockLayout,
+  DockPanelId,
   AsciiConfig,
   AsciiResult,
   LibraryCategory,
   PlayerState,
+  PlayerSkin,
   Playlist,
   SidebarPreferences,
   ThemeConfig,
@@ -17,7 +20,9 @@ import {
   UserSession,
 } from './types';
 import { DEFAULT_THEME_ID, THEMES } from './data/themes';
-import { FONT_OPTIONS, getFontFamily, loadAppearance, loadCustomThemes, resolveTheme, saveAppearance, saveCustomThemes } from './services/themeStorage';
+import { getFontFamily, loadAppearance, loadCustomThemes, normalizeAppearance, resolveTheme, saveAppearance, saveCustomThemes, validateCustomTheme } from './services/themeStorage';
+import { skinVariables } from './services/skin';
+import { createDockLayout, dockPanels } from './services/dockLayout';
 import {
   defaultSession,
   loadAsciiConfig,
@@ -64,6 +69,7 @@ import { TopSearchBar } from './components/TopSearchBar';
 import { BackgroundLayer } from './components/BackgroundLayer';
 import { Sidebar } from './components/Sidebar';
 import { ResizableSplit } from './components/ResizableSplit';
+import { DockWorkspace } from './components/DockWorkspace';
 import { TrackListView, formatSeconds } from './components/TrackListView';
 import { AsciiArtViewer } from './components/AsciiArtViewer';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
@@ -90,9 +96,10 @@ export default function App() {
   const appearanceRef = useRef(appearance);
   appearanceRef.current = appearance;
   const handleChangeAppearance = useCallback((value: AppearanceConfig) => {
-    saveAppearance(value);
-    appearanceRef.current = value;
-    setAppearance(value);
+    const next = normalizeAppearance(value);
+    saveAppearance(next);
+    appearanceRef.current = next;
+    setAppearance(next);
   }, []);
   const handleChangeBackground = useCallback((change: Partial<BackgroundConfig>) => {
     const previous = appearanceRef.current;
@@ -109,7 +116,7 @@ export default function App() {
   const selectedTheme = resolveTheme(themeId, customThemes);
   const theme = React.useMemo(() => appearance.glow ? selectedTheme : { ...selectedTheme, accentGlow: 'transparent' }, [selectedTheme, appearance.glow]);
   useEffect(() => {
-    document.documentElement.style.setProperty('--font-mono', getFontFamily(appearance.font));
+    document.documentElement.style.setProperty('--font-interface', getFontFamily(appearance.font));
     document.documentElement.style.setProperty('--app-accent', theme.accent);
     document.documentElement.style.fontSize = `${appearance.fontSize / 12 * 16}px`;
   }, [appearance.font, appearance.fontSize, theme.accent]);
@@ -118,7 +125,7 @@ export default function App() {
   const initialPreferences = React.useMemo(() => loadPlayerPreferences(), []);
   const [sidebarPreferences, setSidebarPreferences] = useState<SidebarPreferences>(loadSidebarPreferences);
   const visibleLibraryCategories = React.useMemo(() => getVisibleLibraryCategories(sidebarPreferences), [sidebarPreferences]);
-  const hasSidebar = visibleLibraryCategories.length > 0 || sidebarPreferences.showPlaylists;
+  const sidebarAvailable = visibleLibraryCategories.length > 0 || sidebarPreferences.showPlaylists;
 
   // Library & Playlists State
   const [playlists, setPlaylists] = useState<Playlist[]>(loadPlaylists);
@@ -137,6 +144,13 @@ export default function App() {
 
   // Views & UI State
   const [viewMode, setViewMode] = useState<TuiViewMode>(initialPreferences.viewMode);
+  const [isLayoutEditing, setIsLayoutEditing] = useState(false);
+  const [draftLayout, setDraftLayout] = useState<DockLayout | null>(null);
+  const defaultDockLayout = React.useMemo(() => createDockLayout(viewMode === 'custom' ? 'split' : viewMode,
+    appearance.skin, sidebarAvailable), [viewMode, appearance.skin.sidebar, appearance.skin.playerPosition, sidebarAvailable]);
+  const dockLayout = draftLayout || appearance.skin.layout || defaultDockLayout;
+  const customWorkspace = isLayoutEditing || viewMode === 'custom';
+  const hasSidebar = sidebarAvailable && (customWorkspace ? dockPanels(dockLayout.root).includes('sidebar') : appearance.skin.sidebar !== 'hidden');
   const [selectedTrackIndex, setSelectedTrackIndex] = useState<number>(0);
   const [isSidebarFocused, setIsSidebarFocused] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -191,6 +205,12 @@ export default function App() {
       audioEngine.unMute();
     }
   }, [initialPreferences]);
+
+  useEffect(() => {
+    if (viewMode === 'custom' && !appearance.skin.layout && !isLayoutEditing) {
+      setViewMode('split'); savePlayerPreferences({ viewMode: 'split' });
+    }
+  }, [viewMode, appearance.skin.layout, isLayoutEditing]);
 
   useEffect(() => {
     const next = resolveSidebarSelection(sidebarPreferences, playlists,
@@ -930,10 +950,44 @@ export default function App() {
     });
   }, []);
 
+  const handleStartLayoutEditing = useCallback(() => {
+    setContextMenu(null); setSettingsTab(null);
+    setDraftLayout(viewMode === 'custom' ? appearanceRef.current.skin.layout || defaultDockLayout : defaultDockLayout);
+    setIsLayoutEditing(true);
+  }, [viewMode, defaultDockLayout]);
+
+  const handleCancelLayout = useCallback(() => {
+    setDraftLayout(null); setIsLayoutEditing(false);
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('button[aria-label="Edit layout"]')?.focus());
+  }, []);
+
+  const handleDockLayoutChange = (layout: DockLayout, commit: boolean) => {
+    if (isLayoutEditing) { setDraftLayout(layout); return; }
+    const previous = appearanceRef.current;
+    const next = { ...previous, skin: { ...previous.skin, layout } };
+    if (commit) {
+      try { handleChangeAppearance(next); }
+      catch { showToast('The panel sizes could not be saved.'); }
+    } else { appearanceRef.current = next; setAppearance(next); }
+  };
+
+  const handleSaveLayout = () => {
+    if (!draftLayout) return;
+    try {
+      const previous = appearanceRef.current;
+      handleChangeAppearance({ ...previous, skin: { ...previous.skin, layout: draftLayout } });
+      setViewMode('custom'); savePlayerPreferences({ viewMode: 'custom' });
+      handleCancelLayout();
+      showToast('Custom layout saved.');
+    } catch { showToast('The layout could not be saved. Your draft is still open.'); }
+  };
+
   const handleSetViewMode = useCallback((mode: TuiViewMode) => {
+    if (isLayoutEditing) return;
+    if (mode === 'custom' && !appearanceRef.current.skin.layout) { handleStartLayoutEditing(); return; }
     setViewMode(mode);
     savePlayerPreferences({ viewMode: mode });
-  }, []);
+  }, [isLayoutEditing, handleStartLayoutEditing]);
 
   const handleSetActiveCategory = useCallback((cat: LibraryCategory | null) => {
     setActiveCategory(cat);
@@ -949,11 +1003,26 @@ export default function App() {
     catch { showToast('Sidebar preferences apply for this session but could not be saved.'); }
   };
 
-  const handleChangeAsciiConfig = (change: Partial<AsciiConfig>) => {
+  const handleChangeAsciiConfig = useCallback((change: Partial<AsciiConfig>) => {
     const next = { ...asciiConfig, ...change };
     setAsciiConfig(next);
     saveAsciiConfig(next);
-  };
+  }, [asciiConfig]);
+
+  const handleApplySkin = useCallback((value: PlayerSkin) => {
+    const nextAppearance = normalizeAppearance(value.appearance);
+    const isNewTheme = value.theme.id.startsWith('custom_') && !customThemes.some(item => item.id === value.theme.id);
+    const nextTheme = isNewTheme ? validateCustomTheme({ ...value.theme,
+      look: { appearance: nextAppearance, viewMode: value.viewMode, artworkMode: value.artworkMode } }) : value.theme;
+    const nextThemes = isNewTheme ? [...customThemes, nextTheme] : customThemes;
+    if (isNewTheme) saveCustomThemes(nextThemes);
+    handleChangeAppearance(nextAppearance);
+    setCustomThemes(nextThemes);
+    setThemeId(nextTheme.id);
+    saveThemeId(nextTheme.id);
+    handleSetViewMode(value.viewMode);
+    handleChangeAsciiConfig({ mode: value.artworkMode });
+  }, [customThemes, handleChangeAppearance, handleSetViewMode, handleChangeAsciiConfig]);
 
   const handleChangePreferences = (change: Partial<PlaybackSettings>) => {
     if (change.volume !== undefined) handleVolumeChange(change.volume);
@@ -996,7 +1065,7 @@ export default function App() {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (settingsTab !== null) return;
+      if (settingsTab !== null || isLayoutEditing) return;
       const isInput =
         document.activeElement instanceof HTMLInputElement ||
         document.activeElement instanceof HTMLTextAreaElement ||
@@ -1121,11 +1190,10 @@ export default function App() {
           break;
         case 't':
           e.preventDefault();
-          const themeKeys = availableThemes.map(theme => theme.id);
-          const currentIdx = themeKeys.indexOf(themeId);
-          const nextTheme = themeKeys[(currentIdx + 1) % themeKeys.length];
-          setThemeId(nextTheme);
-          saveThemeId(nextTheme);
+          const currentIdx = availableThemes.findIndex(theme => theme.id === themeId);
+          const nextTheme = availableThemes[(currentIdx + 1) % availableThemes.length];
+          if (nextTheme.look) handleApplySkin({ theme: nextTheme, ...nextTheme.look });
+          else { setThemeId(nextTheme.id); saveThemeId(nextTheme.id); }
           break;
         case '?':
           e.preventDefault();
@@ -1148,11 +1216,13 @@ export default function App() {
     showAuthModal,
     showImportModal,
     settingsTab,
+    isLayoutEditing,
     showCreatePlaylistModal,
     renamingPlaylist,
     themeId,
     availableThemes,
     hasSidebar,
+    handleApplySkin,
   ]);
 
   // YouTube Search Handler
@@ -1474,6 +1544,7 @@ export default function App() {
           ['ascii_cover', 'Cover', '2'],
           ['split', 'Split view', '3'],
           ['visualizer', 'Spectrum', '4'],
+          ['custom', 'Custom layout', ''],
         ] as [TuiViewMode, string, string][]
       ).map(([mode, label, hint]) => ({
         id: `view-${mode}`,
@@ -1484,6 +1555,7 @@ export default function App() {
       })),
     },
     { id: 'new-playlist', label: 'New playlist…', icon: FolderPlus, onSelect: handleCreatePlaylist },
+    { id: 'edit-layout', label: 'Edit layout…', icon: Layers, onSelect: handleStartLayoutEditing },
     { id: 'import', label: 'Import playlist…', icon: Link2, hint: 'i', onSelect: () => setShowImportModal(true) },
     { id: 'settings', label: 'Settings…', icon: Settings, onSelect: () => setSettingsTab('general') },
     { id: 'help', label: 'Keyboard shortcuts', icon: HelpCircle, hint: '?', onSelect: () => setSettingsTab('help') },
@@ -1509,8 +1581,164 @@ export default function App() {
     // Keep the native menu for text fields so cut/copy/paste still work.
     if ((e.target as HTMLElement).closest('input, textarea, [contenteditable="true"]')) return;
     e.preventDefault();
-    if (anyModalOpen) return;
+    if (anyModalOpen || isLayoutEditing) return;
     openMenu(e.clientX, e.clientY, buildAppMenu(), 'YouTerm');
+  };
+
+
+  const sidebarPanel = (
+    <Sidebar
+      theme={theme}
+      showBackground={backgroundVisible && appearance.background.showInSidebar}
+      preferences={sidebarPreferences}
+      onChangePreferences={handleChangeSidebarPreferences}
+      activeCategory={activeCategory}
+      selectedPlaylistId={selectedPlaylist?.id || null}
+      playingPlaylistId={playingPlaylistId}
+      playingCategory={playingCategory}
+      isPlaying={playerState.isPlaying}
+      playlists={playlists}
+      likedCount={likedTrackIds.size}
+      onSelectCategory={(cat) => {
+        handleSetActiveCategory(cat);
+        setSelectedPlaylist(null);
+        setIsSearching(false);
+        if (cat === 'explore' && exploreTracks.length === 0) {
+          fetchExploreFeed();
+        }
+      }}
+      onSelectPlaylist={(pl) => {
+        setSelectedPlaylist(pl);
+        handleSetActiveCategory(null);
+        setIsSearching(false);
+      }}
+      onCreatePlaylist={handleCreatePlaylist}
+      onOpenImport={() => setShowImportModal(true)}
+      onPlaylistContextMenu={(playlist, x, y) => openMenu(x, y, buildPlaylistMenu(playlist), playlist.title)}
+      isFocused={isSidebarFocused}
+      isLoggedIn={session.isLoggedIn}
+    />
+  );
+
+  const trackListPanel = (
+    <TrackListView
+      theme={theme}
+      onPrepareTrack={appearance.lowPower ? undefined : (track) => audioEngine.prepare(track.youtubeId)}
+      title={currentViewTitle}
+      subtitle={selectedAlbum?.genre || selectedPlaylist?.description}
+      tracks={displayedTracks}
+      currentTrack={playerState.currentTrack}
+      isPlaying={playerState.isPlaying}
+      selectedTrackIndex={selectedTrackIndex}
+      onSelectTrack={(track, index) => {
+        setSelectedTrackIndex(index);
+      }}
+      onPlayTrack={handlePlayTrack}
+      onToggleLike={handleToggleLike}
+      onAddToQueue={(track) => {
+        setPlayerState((prev) => ({
+          ...prev,
+          queue: [...prev.queue, track],
+        }));
+      }}
+      onViewAscii={(track) => {
+        updateAsciiCover(track, asciiConfig);
+        if (viewMode !== 'split' && !customWorkspace) handleSetViewMode('ascii_cover');
+      }}
+      onContextMenu={handleTrackListContextMenu}
+      backgroundAscii={viewMode === 'tracklist' ? backgroundAscii : null}
+      showBackgroundAscii={!appearance.hideAlbumCover && viewMode === 'tracklist'}
+      asciiConfig={asciiConfig}
+      coverArtworkUrl={coverArtworkUrl}
+      isReorderable={!isSearching && !!selectedPlaylist && isEditablePlaylist(selectedPlaylist)}
+      onReorderTrack={(from, to) => {
+        if (selectedPlaylist && isEditablePlaylist(selectedPlaylist)) {
+          moveInPlaylist(selectedPlaylist, from, to);
+        }
+      }}
+    />
+  );
+
+  const lyricsPanel = (
+    <LyricsView
+      theme={theme}
+      track={playerState.currentTrack}
+      currentTime={playerState.currentTime}
+      duration={playerState.duration}
+      animations={appearance.animations && !appearance.lowPower}
+      onSeek={handleSeek}
+    />
+  );
+
+  const artworkPanel = (
+    <AsciiArtViewer
+      theme={theme}
+      track={playerState.currentTrack}
+      asciiResult={asciiResult}
+      asciiConfig={asciiConfig}
+      onChangeConfig={handleChangeAsciiConfig}
+      onRefresh={() => {
+        if (playerState.currentTrack) {
+          updateAsciiCover(playerState.currentTrack, asciiConfig);
+        }
+      }}
+      isLoading={isAsciiLoading}
+    />
+  );
+
+  const splitArtworkPanel = (
+    <AsciiArtViewer showArtworkIcon={false} sidePanel={lyricsPanel}
+      theme={theme}
+      track={playerState.currentTrack}
+      asciiResult={asciiResult}
+      asciiConfig={asciiConfig}
+      onChangeConfig={handleChangeAsciiConfig}
+      onRefresh={() => {
+        if (playerState.currentTrack) {
+          updateAsciiCover(playerState.currentTrack, asciiConfig);
+        }
+      }}
+      isLoading={isAsciiLoading}
+    />
+  );
+
+  const spectrumPanel = (
+    <SpectrumVisualizer
+      maxFrameRate={appearance.lowPower ? 15 : 60}
+      showBackground={backgroundVisible && appearance.background.showInSpectrum}
+      theme={theme}
+      isPlaying={playerState.isPlaying}
+      currentTrack={playerState.currentTrack}
+    />
+  );
+
+  const playerPanel = (
+    <BottomPlayerBar
+      theme={theme}
+      progressStyle={appearance.skin.progressStyle}
+      controlStyle={appearance.skin.controlStyle}
+      showBackground={backgroundVisible && appearance.background.showInPlayer}
+      playerState={playerState}
+      onTogglePlay={handleTogglePlay}
+      onNext={handleNextTrack}
+      onPrev={handlePrevTrack}
+      onToggleShuffle={handleToggleShuffle}
+      onCycleRepeat={handleCycleRepeat}
+      onToggleMute={handleToggleMute}
+      onVolumeChange={handleVolumeChange}
+      onSeek={handleSeek}
+      onToggleLike={() => handleToggleLike()}
+      onViewAscii={() => handleSetViewMode('ascii_cover')}
+      onToggleFormat={() => audioEngine.toggleFormat()}
+    />
+  );
+
+  const renderDockPanel = (id: DockPanelId): React.ReactNode => {
+    if (id === 'sidebar' && !sidebarAvailable) return <div className="flex flex-1 items-center justify-center p-4 text-center text-xs" style={{ color: theme.textDim }}>
+      Library sections are hidden. Enable them in Settings → General.
+    </div>;
+    return ({ sidebar: sidebarPanel, tracks: trackListPanel, artwork: artworkPanel,
+      lyrics: lyricsPanel, spectrum: spectrumPanel, player: playerPanel })[id];
   };
 
 
@@ -1520,10 +1748,17 @@ export default function App() {
       data-density={appearance.density}
       data-animations={appearance.animations}
       data-glow={appearance.glow}
-      className="relative isolate h-screen max-h-screen w-screen flex flex-col font-mono select-none overflow-hidden"
+      data-player-position={appearance.skin.playerPosition}
+      data-control-style={appearance.skin.controlStyle}
+      className="youterm relative isolate h-screen max-h-screen w-screen flex flex-col font-mono select-none overflow-hidden"
       style={{
         backgroundColor: theme.bg,
         color: theme.text,
+        ...skinVariables(appearance.skin),
+        '--skin-border-color': theme.border,
+        '--app-theme-bg': theme.bg,
+        '--app-theme-card-bg': theme.cardBg,
+        '--app-theme-text': theme.text,
         '--app-surface-bg': surfaceColor(theme.bg, surfaceOpacity),
         '--app-surface-card-bg': surfaceColor(theme.cardBg, surfaceOpacity),
       } as React.CSSProperties}
@@ -1531,10 +1766,11 @@ export default function App() {
       <BackgroundLayer config={appearance.background} onReady={handleBackgroundReady} />
       {scanlinesEnabled && <div aria-hidden="true" className="crt-scanlines pointer-events-none absolute inset-0 z-[1]" />}
       {/* Terminal Window Content */}
-      <div className="relative z-10 flex-1 flex flex-col w-full h-full max-h-full min-h-0 overflow-hidden">
+      <div className="app-shell relative z-10 flex-1 flex flex-col w-full h-full max-h-full min-h-0 overflow-hidden">
         {/* Authentic Unix / Linux Mint Terminal Header Bar */}
-          <div
-            className="flex items-center justify-between gap-3 px-3 py-1.5 border-b text-xs select-none"
+          {appearance.skin.showHeader && <div
+            inert={isLayoutEditing}
+            className="app-header skin-panel flex shrink-0 items-center justify-between gap-3 px-3 py-1.5 border-b text-xs select-none"
             style={{
               borderColor: theme.border,
               backgroundColor: 'var(--app-surface-card-bg)',
@@ -1601,12 +1837,23 @@ export default function App() {
                 <Activity className="w-3 h-3" />
                 <span>[4: Spectrum]</span>
               </button>
+              {appearance.skin.layout && <button type="button" onClick={() => handleSetViewMode('custom')}
+                className="flex items-center gap-1 border px-2 py-0.5" aria-pressed={viewMode === 'custom'}
+                style={{ borderColor: viewMode === 'custom' ? theme.accent : theme.border, color: viewMode === 'custom' ? theme.highlight : theme.textDim }}>
+                <Layers className="h-3 w-3" /> Custom layout
+              </button>}
             </div>
-          </div>
+          </div>}
 
           {/* Top Search & Action Bar */}
           <TopSearchBar
             theme={theme}
+            compactNavigation={!appearance.skin.showHeader}
+            viewMode={viewMode}
+            onChangeViewMode={handleSetViewMode}
+            onEditLayout={handleStartLayoutEditing}
+            isLayoutEditing={isLayoutEditing}
+            hasCustomLayout={!!appearance.skin.layout}
             session={session}
             searchQuery={searchQuery}
             onSearchChange={(q) => {
@@ -1618,176 +1865,31 @@ export default function App() {
             onOpenAuth={() => setShowAuthModal(true)}
             onOpenSettings={() => setSettingsTab('general')}
             isModalOpen={anyModalOpen}
-            isSearching={isSearching}
           />
 
-          {/* Main TUI Content Grid */}
+          {/* The custom workspace keeps every panel independently movable. */}
+          {customWorkspace ? <DockWorkspace layout={dockLayout} editing={isLayoutEditing} theme={theme}
+            spacing={appearance.skin.panelGap} renderPanel={renderDockPanel} onChange={handleDockLayoutChange}
+            onReset={() => createDockLayout('split', appearance.skin, sidebarAvailable)}
+            onSave={handleSaveLayout} onCancel={handleCancelLayout} /> :
           <ResizableSplit theme={theme} storageKey="sidebar" label="Resize sidebar"
+            reverse={appearance.skin.sidebar === 'right'} spacing={appearance.skin.panelGap}
             unit="pixels" defaultSize={256} minFirst={176} minSecond={420} maxFirst={480}
-            showFirst={hasSidebar}
-            first={<Sidebar
-              theme={theme}
-              showBackground={backgroundVisible && appearance.background.showInSidebar}
-              preferences={sidebarPreferences}
-              onChangePreferences={handleChangeSidebarPreferences}
-              activeCategory={activeCategory}
-              selectedPlaylistId={selectedPlaylist?.id || null}
-              playingPlaylistId={playingPlaylistId}
-              playingCategory={playingCategory}
-              isPlaying={playerState.isPlaying}
-              playlists={playlists}
-              likedCount={likedTrackIds.size}
-              onSelectCategory={(cat) => {
-                handleSetActiveCategory(cat);
-                setSelectedPlaylist(null);
-                setIsSearching(false);
-                if (cat === 'explore' && exploreTracks.length === 0) {
-                  fetchExploreFeed();
-                }
-              }}
-              onSelectPlaylist={(pl) => {
-                setSelectedPlaylist(pl);
-                handleSetActiveCategory(null);
-                setIsSearching(false);
-              }}
-              onCreatePlaylist={handleCreatePlaylist}
-              onOpenImport={() => setShowImportModal(true)}
-              onPlaylistContextMenu={(playlist, x, y) => openMenu(x, y, buildPlaylistMenu(playlist), playlist.title)}
-              isFocused={isSidebarFocused}
-              isLoggedIn={session.isLoggedIn}
-            />}
-
+            showFirst={hasSidebar} first={sidebarPanel}
             second={<>
-            {viewMode === 'tracklist' && (
-              <TrackListView
-                theme={theme}
-                onPrepareTrack={appearance.lowPower ? undefined : (track) => audioEngine.prepare(track.youtubeId)}
-                title={currentViewTitle}
-                subtitle={selectedAlbum?.genre || selectedPlaylist?.description}
-                tracks={displayedTracks}
-                currentTrack={playerState.currentTrack}
-                isPlaying={playerState.isPlaying}
-                selectedTrackIndex={selectedTrackIndex}
-                onSelectTrack={(track, index) => {
-                  setSelectedTrackIndex(index);
-                }}
-                onPlayTrack={handlePlayTrack}
-                onToggleLike={handleToggleLike}
-                onAddToQueue={(track) => {
-                  setPlayerState((prev) => ({
-                    ...prev,
-                    queue: [...prev.queue, track],
-                  }));
-                }}
-                onViewAscii={(track) => {
-                  updateAsciiCover(track, asciiConfig);
-                  handleSetViewMode('ascii_cover');
-                }}
-                onContextMenu={handleTrackListContextMenu}
-                backgroundAscii={backgroundAscii}
-                showBackgroundAscii={!appearance.hideAlbumCover}
-                asciiConfig={asciiConfig}
-                coverArtworkUrl={coverArtworkUrl}
-                isReorderable={!isSearching && !!selectedPlaylist && isEditablePlaylist(selectedPlaylist)}
-                onReorderTrack={(from, to) => {
-                  if (selectedPlaylist && isEditablePlaylist(selectedPlaylist)) {
-                    moveInPlaylist(selectedPlaylist, from, to);
-                  }
-                }}
-              />
-            )}
-
-            {viewMode === 'ascii_cover' && (
-              <AsciiArtViewer
-                theme={theme}
-                track={playerState.currentTrack}
-                asciiResult={asciiResult}
-                asciiConfig={asciiConfig}
-                onChangeConfig={handleChangeAsciiConfig}
-                onRefresh={() => {
-                  if (playerState.currentTrack) {
-                    updateAsciiCover(playerState.currentTrack, asciiConfig);
-                  }
-                }}
-                isLoading={isAsciiLoading}
-              />
-            )}
-
-            {viewMode === 'split' && (
-              <ResizableSplit theme={theme} storageKey="artwork" label="Resize album artwork panel" regionLabel="Split view"
-                rowAt="lg" defaultSize={{ row: 40, column: 100 / 3 }}
+              {viewMode === 'tracklist' && trackListPanel}
+              {viewMode === 'ascii_cover' && artworkPanel}
+              {viewMode === 'split' && <ResizableSplit theme={theme} storageKey="artwork" label="Resize album artwork panel" regionLabel="Split view"
+                spacing={appearance.skin.panelGap} rowAt="lg" defaultSize={{ row: 40, column: 100 / 3 }}
                 minFirst={{ row: 260, column: 120 }} minSecond={{ row: 300, column: 260 }}
-                first={<TrackListView
-                    theme={theme}
-                    onPrepareTrack={appearance.lowPower ? undefined : (track) => audioEngine.prepare(track.youtubeId)}
-                    title={currentViewTitle}
-                    tracks={displayedTracks}
-                    currentTrack={playerState.currentTrack}
-                    isPlaying={playerState.isPlaying}
-                    selectedTrackIndex={selectedTrackIndex}
-                    onSelectTrack={(_, idx) => setSelectedTrackIndex(idx)}
-                    onPlayTrack={handlePlayTrack}
-                    onToggleLike={handleToggleLike}
-                    onAddToQueue={(track) => {
-                      setPlayerState((prev) => ({ ...prev, queue: [...prev.queue, track] }));
-                    }}
-                    onViewAscii={(track) => {
-                      updateAsciiCover(track, asciiConfig);
-                    }}
-                    onContextMenu={handleTrackListContextMenu}
-                    backgroundAscii={null}
-                    showBackgroundAscii={false}
-                    asciiConfig={asciiConfig}
-                    coverArtworkUrl={coverArtworkUrl}
-                    isReorderable={!isSearching && !!selectedPlaylist && isEditablePlaylist(selectedPlaylist)}
-                    onReorderTrack={(from, to) => {
-                      if (selectedPlaylist && isEditablePlaylist(selectedPlaylist)) {
-                        moveInPlaylist(selectedPlaylist, from, to);
-                      }
-                    }}
-                  />}
-
-                second={<AsciiArtViewer
-                    showArtworkIcon={false}
-                    theme={theme}
-                    track={playerState.currentTrack}
-                    asciiResult={asciiResult}
-                    asciiConfig={asciiConfig}
-                    onChangeConfig={handleChangeAsciiConfig}
-                    onRefresh={() => {
-                      if (playerState.currentTrack) updateAsciiCover(playerState.currentTrack, asciiConfig);
-                    }}
-                    isLoading={isAsciiLoading}
-                    sidePanel={
-                      <LyricsView
-                        theme={theme}
-                        track={playerState.currentTrack}
-                        currentTime={playerState.currentTime}
-                        duration={playerState.duration}
-                        animations={appearance.animations && !appearance.lowPower}
-                        onSeek={handleSeek}
-                      />
-                    }
-                  />}
-              />
-            )}
-
-            {viewMode === 'visualizer' && (
-              <SpectrumVisualizer
-                maxFrameRate={appearance.lowPower ? 15 : 60}
-                showBackground={backgroundVisible && appearance.background.showInSpectrum}
-                theme={theme}
-                isPlaying={playerState.isPlaying}
-                currentTrack={playerState.currentTrack}
-              />
-            )}
-            </>}
-          />
+                first={trackListPanel} second={splitArtworkPanel} />}
+              {viewMode === 'visualizer' && spectrumPanel}
+            </>} />}
 
           {/* Playback Toast / Warning */}
           {playbackWarning && (
             <div
-              className="px-3 py-1.5 text-xs font-mono border-t flex items-center gap-2 animate-pulse"
+              className="playback-warning px-3 py-1.5 text-xs font-mono border-t flex items-center gap-2 animate-pulse"
               style={{
                 backgroundColor: 'rgba(234, 179, 8, 0.12)',
                 borderColor: theme.border,
@@ -1800,22 +1902,7 @@ export default function App() {
           )}
 
           {/* Bottom Player Bar */}
-          <BottomPlayerBar
-            theme={theme}
-            showBackground={backgroundVisible && appearance.background.showInPlayer}
-            playerState={playerState}
-            onTogglePlay={handleTogglePlay}
-            onNext={handleNextTrack}
-            onPrev={handlePrevTrack}
-            onToggleShuffle={handleToggleShuffle}
-            onCycleRepeat={handleCycleRepeat}
-            onToggleMute={handleToggleMute}
-            onVolumeChange={handleVolumeChange}
-            onSeek={handleSeek}
-            onToggleLike={() => handleToggleLike()}
-            onViewAscii={() => handleSetViewMode('ascii_cover')}
-            onToggleFormat={() => audioEngine.toggleFormat()}
-          />
+          {!customWorkspace && playerPanel}
         </div>
 
       {/* Context menu & toast */}
@@ -1859,6 +1946,10 @@ export default function App() {
           sidebarPreferences={sidebarPreferences}
           onChangeSidebarPreferences={handleChangeSidebarPreferences}
           currentTheme={theme}
+          onEditLayout={handleStartLayoutEditing}
+          viewMode={viewMode}
+          artworkMode={asciiConfig.mode}
+          onApplySkin={handleApplySkin}
           customThemes={customThemes}
           appearance={appearance}
           preferences={{
@@ -1888,8 +1979,9 @@ export default function App() {
             if (themeId === id) { setThemeId(DEFAULT_THEME_ID); saveThemeId(DEFAULT_THEME_ID); }
           }}
           onSelectTheme={(tId) => {
-            setThemeId(tId);
-            saveThemeId(tId);
+            const selected = resolveTheme(tId, customThemes);
+            if (selected.look) handleApplySkin({ theme: selected, ...selected.look });
+            else { setThemeId(tId); saveThemeId(tId); }
           }}
           onClose={() => setSettingsTab(null)}
         />

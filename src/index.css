@@ -2,7 +2,7 @@
 
 /* Monospace crisp rendering */
 body {
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--font-interface, ui-monospace, monospace);
   letter-spacing: -0.01em;
   background-color: #0c0c0c;
   color: #d1d1d1;
@@ -55,10 +55,10 @@ body {
   background: var(--resize-border);
 }
 
-.resize-handle[data-direction="row"]::before { inset: 0 auto 0 2px; width: 1px; }
-.resize-handle[data-direction="column"]::before { inset: 2px 0 auto; height: 1px; }
-.resize-handle[data-direction="row"]::after { top: calc(50% - 12px); left: 1px; width: 3px; height: 24px; }
-.resize-handle[data-direction="column"]::after { left: calc(50% - 12px); top: 1px; width: 24px; height: 3px; }
+.resize-handle[data-direction="row"]::before { inset: 0 auto 0 calc(50% - 0.5px); width: 1px; }
+.resize-handle[data-direction="column"]::before { inset: calc(50% - 0.5px) 0 auto; height: 1px; }
+.resize-handle[data-direction="row"]::after { top: calc(50% - 12px); left: calc(50% - 1.5px); width: 3px; height: 24px; }
+.resize-handle[data-direction="column"]::after { left: calc(50% - 12px); top: calc(50% - 1.5px); width: 24px; height: 3px; }
 
 .resize-handle:hover::before,
 .resize-handle:hover::after,
@@ -93,7 +93,6 @@ html[data-panel-resizing="column"] { cursor: row-resize !important; user-select:
 }
 
 [data-glow="false"] * {
-  box-shadow: none !important;
   text-shadow: none !important;
 }
 
@@ -109,13 +108,13 @@ select {
 }
 
 select option {
-  background-color: #141414 !important;
-  color: #d1d1d1 !important;
+  background-color: var(--app-theme-bg, #141414) !important;
+  color: var(--app-theme-text, #d1d1d1) !important;
 }
 
 select option:checked {
-  background-color: #22c55e !important;
-  color: #000000 !important;
+  background-color: var(--app-accent, #22c55e) !important;
+  color: var(--app-theme-bg, #000000) !important;
 }
 
 /* Custom terminal range sliders */
@@ -143,3 +142,118 @@ input[type="search"] {
   font-family: inherit;
   border-radius: 0;
 }
+
+/* Skin tokens are shared by the player and its dialogs. ASCII keeps its own font. */
+.youterm,
+.youterm .font-mono {
+  font-family: var(--font-interface, ui-monospace, monospace);
+}
+
+.youterm pre,
+.youterm .ascii-progress {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.app-shell {
+  gap: var(--skin-gap, 0px);
+  padding: var(--skin-gap, 0px);
+}
+
+.app-header { order: 0; }
+.app-search { order: 1; }
+.app-shell > [data-split="sidebar"] { order: 3; }
+.app-shell > .dock-workspace { order: 3; }
+.playback-warning { order: 4; }
+.app-player { order: 5; }
+[data-player-position="top"] .app-player { order: 2; }
+
+.youterm .border {
+  border-width: var(--skin-border-width, 1px);
+  border-radius: var(--skin-panel-radius, 0px);
+}
+
+.youterm .border-t { border-top-width: var(--skin-border-width, 1px); }
+.youterm .border-b { border-bottom-width: var(--skin-border-width, 1px); }
+.youterm .border-l { border-left-width: var(--skin-border-width, 1px); }
+.youterm .border-r { border-right-width: var(--skin-border-width, 1px); }
+
+.youterm .skin-panel {
+  border: var(--skin-border-width, 1px) solid var(--skin-border-color);
+  border-radius: var(--skin-panel-radius, 0px);
+  box-shadow: var(--skin-shadow, none);
+  overflow: hidden;
+}
+
+.youterm :is(button, select, input[type="text"], input[type="search"],
+  input[type="number"], input[type="url"], input[type="password"], .skin-field) {
+  border-radius: var(--skin-control-radius, 0px);
+}
+
+.youterm input[type="range"],
+.youterm input[type="range"]::-webkit-slider-thumb {
+  border-radius: var(--skin-control-radius, 0px);
+}
+
+.youterm input[type="range"]::-moz-range-thumb {
+  background: var(--app-accent, #22c55e);
+  border: 1px solid var(--skin-border-color);
+  border-radius: var(--skin-control-radius, 0px);
+  width: 12px;
+  height: 12px;
+}
+
+.youterm img,
+.youterm .skin-artwork-frame {
+  border-radius: var(--skin-artwork-radius, 0px);
+}
+
+.youterm .custom-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: var(--skin-control-radius, 0px);
+}
+
+[data-control-style="minimal"] .app-player .play-toggle {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.youterm input[type="range"]:focus-visible,
+.youterm button:focus-visible,
+.youterm select:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+}
+
+/* Playback adapts to the width of its docked panel, including side columns. */
+.app-player { container-type: inline-size; }
+@container (min-width: 700px) {
+  .player-row { flex-direction: row; }
+  .player-track, .player-volume { width: 30%; }
+}
+
+.dock-workspace { gap: max(6px, var(--skin-gap, 0px)); }
+.dock-workspace[data-editing="true"] { overflow: auto; }
+.dock-workspace[data-editing="true"] > .dock-tree { flex-shrink: 0; }
+.dock-tree { overflow: hidden; }
+.dock-panel { position: relative; background: var(--app-surface-bg); }
+.dock-panel-content { overflow: auto; }
+.youterm .dock-panel-content > .skin-panel {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.dock-panel-content > .app-player { flex: 1 0 auto; }
+.dock-panel[data-dock-panel="artwork"] .dock-panel-content > .skin-panel { min-height: 300px; }
+.dock-panel[data-dock-panel="lyrics"] .dock-panel-content > section { min-height: 220px; }
+.dock-grip { cursor: grab; touch-action: none; user-select: none; }
+.dock-panel-heading { position: relative; z-index: 21; }
+.dock-panel[data-picked="true"] { outline: 2px solid var(--app-accent); outline-offset: -2px; }
+[data-layout-dragging="true"], [data-layout-dragging="true"] * { cursor: grabbing !important; user-select: none !important; }
+.dock-drop-preview { position: absolute; z-index: 25; border: 2px solid; border-radius: var(--skin-panel-radius); }
+[data-drop="left"] > .dock-drop-preview { inset: 0 50% 0 0; }
+[data-drop="right"] > .dock-drop-preview { inset: 0 0 0 50%; }
+[data-drop="top"] > .dock-drop-preview { inset: 0 0 50%; }
+[data-drop="bottom"] > .dock-drop-preview { inset: 50% 0 0; }
+[data-drop="center"] > .dock-drop-preview { inset: 4px; }
+.dock-destinations { position: absolute; inset: 30px 0 0; z-index: 22; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 4px; opacity: 0.96; overflow: auto; }
+.dock-toolbar button:disabled { cursor: default; }

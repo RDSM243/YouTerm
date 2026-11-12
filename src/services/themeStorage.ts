@@ -1,6 +1,7 @@
 import { DEFAULT_THEME_ID, THEMES } from '../data/themes';
-import type { AppearanceConfig, ThemeConfig, ThemeId } from '../types';
+import type { AppearanceConfig, PlayerSkin, SkinSnapshot, ThemeConfig, ThemeId } from '../types';
 import { DEFAULT_BACKGROUND, normalizeBackground } from './background';
+import { DEFAULT_SKIN, normalizeSkin } from './skin';
 
 const CUSTOM_THEMES_KEY = 'youterm_custom_themes_v1';
 const APPEARANCE_KEY = 'youterm_appearance_v1';
@@ -11,6 +12,7 @@ export const THEME_COLORS = {
 export type ThemeColor = keyof typeof THEME_COLORS;
 export const FONT_OPTIONS = {
   system: 'ui-monospace, "DejaVu Sans Mono", "Liberation Mono", monospace',
+  sans: 'system-ui, -apple-system, "Segoe UI", sans-serif',
   jetbrains: '"JetBrains Mono", ui-monospace, monospace',
   fira: '"Fira Code", ui-monospace, monospace',
   ubuntu: '"Ubuntu Mono", ui-monospace, monospace',
@@ -30,6 +32,7 @@ export const DEFAULT_APPEARANCE: AppearanceConfig = {
   font: 'system', fontSize: 12, density: 'compact', animations: true,
   glow: true, scanlines: false, lowPower: true, hideAlbumCover: false,
   background: { ...DEFAULT_BACKGROUND },
+  skin: { ...DEFAULT_SKIN },
 };
 
 export function accentGlow(accent: string): string {
@@ -44,7 +47,7 @@ export function validateCustomTheme(value: unknown): ThemeConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Choose a valid YouTerm theme JSON file.');
   const input = value as Record<string, unknown>;
   if (typeof input.name !== 'string' || !input.name.trim() || input.name.length > 60) throw new Error('Theme name must contain 1–60 characters.');
-  const result = { ...THEMES[DEFAULT_THEME_ID], name: input.name.trim(),
+  const result: ThemeConfig = { ...THEMES[DEFAULT_THEME_ID], name: input.name.trim(),
     id: typeof input.id === 'string' && /^custom_[a-zA-Z0-9_-]{1,80}$/.test(input.id)
       ? input.id as ThemeId : `custom_${crypto.randomUUID()}` as ThemeId };
   for (const field of Object.keys(THEME_COLORS) as ThemeColor[]) {
@@ -62,18 +65,48 @@ export function validateCustomTheme(value: unknown): ThemeConfig {
     }
   }
   result.accentGlow = accentGlow(result.accent);
+  if (input.look !== undefined) result.look = readSkinSnapshot(input.look);
   return result;
 }
 
+function readSkinSnapshot(value: unknown): SkinSnapshot {
+  const input = value as Record<string, unknown> | null;
+  if (!input || typeof input !== 'object' || !input.appearance || typeof input.appearance !== 'object' || Array.isArray(input.appearance)
+    || !['tracklist', 'ascii_cover', 'split', 'visualizer', 'custom'].includes(input.viewMode as string)
+    || !['half_block', 'braille', 'original_hd', 'matrix_code', 'retro_crt'].includes(input.artworkMode as string)) {
+    throw new Error('This skin is missing its appearance, view or artwork settings.');
+  }
+  const appearance = normalizeAppearance(input.appearance);
+  if (input.viewMode === 'custom' && !appearance.skin.layout) throw new Error('This skin is missing a valid custom layout.');
+  return { appearance, viewMode: input.viewMode as SkinSnapshot['viewMode'],
+    artworkMode: input.artworkMode as SkinSnapshot['artworkMode'] };
+}
+
 export function importThemeJson(json: string): ThemeConfig {
+  return importThemeBundleJson(json).theme;
+}
+
+export function importThemeBundleJson(json: string): { theme: ThemeConfig; skin?: PlayerSkin } {
   if (json.length > 64 * 1024) throw new Error('Theme files must be smaller than 64 KB.');
   let value: any;
   try { value = JSON.parse(json); } catch { throw new Error('The theme file is not valid JSON.'); }
-  if (value?.version !== undefined && value.version !== 1) throw new Error('This theme format version is not supported.');
-  return validateCustomTheme(value?.theme ?? value);
+  if (value?.version !== undefined && value.version !== 1 && value.version !== 2) throw new Error('This theme format version is not supported.');
+  const theme = validateCustomTheme(value?.theme ?? value);
+  if (value?.version !== 2) return { theme, ...(theme.look ? { skin: { theme, ...theme.look } } : {}) };
+  const look = readSkinSnapshot(value);
+  return { theme, skin: { theme, ...look } };
 }
 
-export function exportThemeJson(theme: ThemeConfig): string {
+export function exportThemeJson(theme: ThemeConfig, skin?: SkinSnapshot): string {
+  if (skin) {
+    const appearance = normalizeAppearance(skin.appearance);
+    // Image files belong to the local background store, not to a portable skin.
+    appearance.background = { ...appearance.background, imageRevision: '', imageName: '' };
+    const portableTheme = validateCustomTheme(theme);
+    delete portableTheme.look;
+    return JSON.stringify({ version: 2, theme: portableTheme, appearance,
+      viewMode: skin.viewMode, artworkMode: skin.artworkMode }, null, 2) + '\n';
+  }
   return JSON.stringify({ version: 1, theme }, null, 2) + '\n';
 }
 
@@ -114,6 +147,7 @@ export function normalizeAppearance(value: unknown): AppearanceConfig {
     if (typeof input[field] === 'boolean') result[field] = input[field];
   }
   result.background = normalizeBackground(input.background);
+  result.skin = normalizeSkin(input.skin);
   return result;
 }
 

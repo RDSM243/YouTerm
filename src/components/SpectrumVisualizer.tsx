@@ -634,7 +634,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
     <div
       ref={containerRef}
       data-background-region="spectrum" data-background-enabled={showBackground}
-      className="flex-1 flex flex-col min-h-0 relative select-none font-mono overflow-hidden text-xs w-full h-full"
+      className="skin-panel flex-1 flex flex-col min-h-0 relative select-none font-mono overflow-hidden text-xs w-full h-full"
       style={{ backgroundColor: showBackground ? 'transparent' : theme.bg,
         ...(!showBackground ? { '--app-surface-bg': theme.bg, '--app-surface-card-bg': theme.cardBg } : {}) } as React.CSSProperties}
     >

@@ -76,7 +76,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
 
   if (!track) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-xs font-mono select-none" style={{ color: theme.textDim }}>
+      <div className="skin-panel flex-1 flex flex-col items-center justify-center p-8 text-xs font-mono select-none" style={{ color: theme.textDim, backgroundColor: 'var(--app-surface-bg)' }}>
         <p>[ No song selected ]</p>
         <p className="mt-2 text-[11px]">Select a song to see its artwork.</p>
       </div>
@@ -84,7 +84,8 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
   }
 
   return (
-    <div role="region" aria-label="Album artwork" className="flex-1 flex flex-col min-h-0 min-w-0 relative select-none font-mono overflow-hidden">
+    <div role="region" aria-label="Album artwork" className="skin-panel flex-1 flex flex-col min-h-0 min-w-0 relative select-none font-mono overflow-hidden"
+      style={{ backgroundColor: 'var(--app-surface-bg)' }}>
       {/* Top Header */}
       <div
         className="px-4 py-2 border-b flex shrink-0 flex-wrap items-center justify-between gap-2 z-10 text-xs"
@@ -227,7 +228,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
             ) : asciiConfig.mode === 'original_hd' ? (
               /* High-Definition Original Image Canvas */
               <div
-                className="my-auto shrink-0 p-3 border rounded-none max-w-full flex flex-col items-center gap-2.5 shadow-2xl transition-all"
+                className="skin-artwork-frame my-auto shrink-0 p-3 border rounded-none max-w-full flex flex-col items-center gap-2.5 shadow-2xl transition-all"
                 style={{
                   borderColor: theme.accent,
                   backgroundColor: 'var(--app-surface-bg)',
@@ -243,7 +244,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
                   </div>
                 </div>
 
-                <div className="relative group overflow-hidden border p-1 max-w-full" style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
+                <div className="skin-artwork-frame relative group overflow-hidden border p-1 max-w-full" style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
                   <img
                     src={artworkUrl}
                     alt={track.title}

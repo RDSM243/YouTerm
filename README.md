@@ -13,9 +13,11 @@
 ## Make it yours
 
 - **Choose your look:** pick a theme such as Tokyo Night, Dracula, Nord or Gruvbox, or create your own.
-- **Fine-tune the details:** customize colors, fonts, text size, spacing, animations and retro effects.
+- **Fine-tune the details:** start with Terminal, Rounded or Cover Focus, then customize panel, button and artwork corners, spacing, borders, shadows, fonts and effects.
+- **Arrange your player:** move the sidebar to either side or hide it, put playback controls at the top or bottom, and choose ASCII or continuous progress bars.
+- **Build your own layout:** drag library, tracks, artwork, lyrics, spectrum and playback panels into place, resize their dividers, and save the composition with your skin. The editor supports undo, redo and cancelling changes.
 - **Set your background:** import an image in Settings → Appearance and adjust brightness, dark overlay and panel opacity. Choose independently whether to show it behind the sidebar, player bar and Spectrum. Settings stays opaque.
-- **Share your themes:** import and export your creations.
+- **Share your skins:** import and export colors, typography, shapes, layout and effects together. Older color themes still work; background image files are imported separately.
 - **See your music:** switch between album artwork, ASCII art, track lists and an audio visualizer.
 - **Listen and organize:** search for music, manage playlists, build your queue and connect your account to access your YouTube Music library.
 - **Keep your hands on the keyboard:** control playback and navigate the player with shortcuts.
@@ -35,6 +37,8 @@ On Windows, run the `-setup.exe` installer. It installs Microsoft Edge WebView2 
 A **macOS** version is planned for the future.
 
 ## Get involved
+
+For a local debug build and a temporary test profile, see [Testing in Antigravity (Português)](./docs/DEBUG.pt-BR.md).
 
 Ideas, themes, feedback and contributions are welcome. Share what you would like to see in the player by [opening an issue](https://github.com/RDSM243/YouTerm/issues) or submitting a contribution.
 

@@ -7,8 +7,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test:skins": "node scripts/check-skins.mjs",
     "preview": "vite preview",
     "tauri:dev": "cargo run --manifest-path src-tauri/Cargo.toml",
+    "debug:build": "node scripts/debug.mjs --build-only",
+    "app:debug": "node scripts/debug.mjs",
     "tauri:build": "npm run build && cargo build --release --manifest-path src-tauri/Cargo.toml",
     "app": "./src-tauri/target/release/youterm",
     "app:check": "./src-tauri/target/release/youterm --check",

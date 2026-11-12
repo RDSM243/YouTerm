@@ -18,19 +18,25 @@ interface ResizableSplitProps {
   minFirst: Size;
   minSecond: Size;
   maxFirst?: number;
+  reverse?: boolean;
+  spacing?: number;
+  axis?: Direction;
+  value?: number;
+  onValueChange?: (value: number, commit: boolean) => void;
 }
 
-const HANDLE_SIZE = 6;
 const sizeFor = (size: Size, direction: Direction) => typeof size === 'number' ? size : size[direction];
 
 export function ResizableSplit({
   theme, storageKey, label, regionLabel, first, second, showFirst = true, rowAt,
   unit = 'percent', defaultSize, minFirst, minSecond, maxFirst = Infinity,
+  reverse = false, spacing = 0,
+  axis, value, onValueChange,
 }: ResizableSplitProps) {
   const key = `youterm_layout_${storageKey}_v1`;
   const query = rowAt ? `(min-width: ${rowAt === 'md' ? 48 : 64}rem)` : null;
   const [wide, setWide] = useState(() => !query || window.matchMedia(query).matches);
-  const direction: Direction = wide ? 'row' : 'column';
+  const direction: Direction = axis || (wide ? 'row' : 'column');
   const [sizes, setSizes] = useState<Partial<Record<Direction, number>>>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(key) || '{}');
@@ -74,9 +80,11 @@ export function ResizableSplit({
       if (dragRef.current) delete document.documentElement.dataset.panelResizing;
       dragRef.current = null;
     };
-  }, [direction, showFirst]);
+  }, [direction, showFirst, reverse, spacing]);
 
-  const available = Math.max(0, extent - HANDLE_SIZE);
+  const handleSize = Math.max(6, spacing);
+  const reversed = direction === 'row' && reverse;
+  const available = Math.max(0, extent - handleSize);
   const firstMinimum = sizeFor(minFirst, direction);
   const secondMinimum = sizeFor(minSecond, direction);
   // Share the space proportionally when a small window cannot fit both minimums.
@@ -84,10 +92,15 @@ export function ResizableSplit({
   const minimum = firstMinimum * scale;
   const maximum = Math.max(minimum, Math.min(maxFirst, available - secondMinimum * scale));
   const clamp = (value: number) => Math.max(minimum, Math.min(maximum, value));
-  const preferredSize = sizes[direction] ?? sizeFor(defaultSize, direction);
+  const preferredSize = value ?? sizes[direction] ?? sizeFor(defaultSize, direction);
   const pixels = clamp(unit === 'percent' ? preferredSize / 100 * available : preferredSize);
 
+  useLayoutEffect(() => {
+    if (value !== undefined && !dragRef.current) sizesRef.current = { ...sizesRef.current, [direction]: value };
+  }, [value, direction]);
+
   const save = () => {
+    if (onValueChange) { onValueChange(sizesRef.current[direction] ?? preferredSize, true); return; }
     try { localStorage.setItem(key, JSON.stringify(sizesRef.current)); }
     catch { /* Resizing still works when local storage is unavailable. */ }
   };
@@ -96,9 +109,11 @@ export function ResizableSplit({
     const next = { ...sizesRef.current, [direction]: unit === 'percent' ? clamp(value) / available * 100 : clamp(value) };
     sizesRef.current = next;
     setSizes(next);
+    if (onValueChange && !persist) onValueChange(next[direction]!, false);
     if (persist) save();
   };
   const reset = () => {
+    if (onValueChange) { onValueChange(sizeFor(defaultSize, direction), true); return; }
     const next = { ...sizesRef.current };
     delete next[direction];
     sizesRef.current = next;
@@ -117,7 +132,7 @@ export function ResizableSplit({
   return (
     <div ref={containerRef} role={regionLabel ? 'region' : undefined} aria-label={regionLabel}
       data-split={storageKey} className="flex min-h-0 min-w-0 flex-1 overflow-hidden"
-      style={{ flexDirection: direction }}>
+      style={{ flexDirection: reversed ? 'row-reverse' : direction }}>
       <div id={firstId} className="min-h-0 min-w-0 flex-col overflow-hidden"
         style={{ display: showFirst ? 'flex' : 'none', flex: second == null ? '1 1 0%' : `0 0 ${extent ? `${pixels}px` : `${preferredSize}${unit === 'percent' ? '%' : 'px'}`}` }}>
         {first}
@@ -128,7 +143,7 @@ export function ResizableSplit({
         aria-valuetext={`${Math.round(pixels)} pixels`}
         title="Drag to resize · Double-click to reset · Arrow keys to adjust"
         className="resize-handle" data-direction={direction} data-dragging={dragging}
-        style={{ '--resize-border': theme.border, '--resize-accent': theme.accent } as React.CSSProperties}
+        style={{ '--resize-border': theme.border, '--resize-accent': theme.accent, flexBasis: handleSize } as React.CSSProperties}
         onDoubleClick={reset}
         onPointerDown={event => {
           if (event.button !== 0 || !event.isPrimary) return;
@@ -142,13 +157,13 @@ export function ResizableSplit({
         onPointerMove={event => {
           const drag = dragRef.current;
           if (!drag || drag.pointerId !== event.pointerId) return;
-          resize(drag.size + (direction === 'row' ? event.clientX : event.clientY) - drag.start);
+          resize(drag.size + ((direction === 'row' ? event.clientX : event.clientY) - drag.start) * (reversed ? -1 : 1));
         }}
         onPointerUp={finishDrag} onPointerCancel={finishDrag} onLostPointerCapture={finishDrag}
         onKeyDown={event => {
           if (event.key === 'Tab') { event.stopPropagation(); return; }
-          const decrease = direction === 'row' ? 'ArrowLeft' : 'ArrowUp';
-          const increase = direction === 'row' ? 'ArrowRight' : 'ArrowDown';
+          const decrease = direction === 'row' ? reversed ? 'ArrowRight' : 'ArrowLeft' : 'ArrowUp';
+          const increase = direction === 'row' ? reversed ? 'ArrowLeft' : 'ArrowRight' : 'ArrowDown';
           if (![decrease, increase, 'Home', 'End', 'Enter'].includes(event.key)) return;
           event.preventDefault();
           event.stopPropagation();

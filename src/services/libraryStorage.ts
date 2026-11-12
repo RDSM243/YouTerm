@@ -197,7 +197,7 @@ export function loadPlayerPreferences(): PlayerPreferences {
           repeat: ['off', 'all', 'one'].includes(parsed.repeat) ? parsed.repeat : defaultPlayerPreferences.repeat,
           audioFormat: ['m4a', 'webm'].includes(parsed.audioFormat) ? parsed.audioFormat : defaultPlayerPreferences.audioFormat,
           viewMode: parsed.viewMode === 'lyrics' ? 'split'
-            : ['tracklist', 'ascii_cover', 'split', 'visualizer'].includes(parsed.viewMode)
+            : ['tracklist', 'ascii_cover', 'split', 'visualizer', 'custom'].includes(parsed.viewMode)
               ? parsed.viewMode
               : defaultPlayerPreferences.viewMode,
           activeCategory: ['explore', 'made_for_you', 'recently_played', 'liked_songs', 'albums', 'artists', 'podcasts'].includes(parsed.activeCategory)
