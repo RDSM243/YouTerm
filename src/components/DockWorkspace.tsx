@@ -150,17 +150,19 @@ export function DockWorkspace({ layout, editing, theme, spacing, renderPanel, on
         <button type="button" aria-label={`Hide ${DOCK_PANELS[id]} panel`} disabled={panels.length === 1}
           className="shrink-0 p-1 disabled:opacity-30" onClick={() => change(removeDockPanel(layout, id), `${DOCK_PANELS[id]} hidden. Add it back from the toolbar.`)}><X className="h-3 w-3" /></button>
       </div>}
-      <div className="dock-panel-content flex min-h-0 min-w-0 flex-1 flex-col" inert={editing && id !== 'player'}>{renderPanel(id)}</div>
+      <div className="dock-panel-stage relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="dock-panel-content flex min-h-0 min-w-0 flex-1 flex-col" inert={editing && id !== 'player'}>{renderPanel(id)}</div>
+        {editing && picked && picked !== id && !drag && <div className="dock-destinations" style={{ backgroundColor: 'var(--app-theme-bg)' }}>
+          <span className="text-center text-[11px]">Move {DOCK_PANELS[picked]} here</span>
+          <div className="flex flex-wrap items-center justify-center gap-1">
+            {destinations.map(({ position, label, icon: Icon }) => <button key={position} type="button"
+              aria-label={position === 'center' ? `Swap ${DOCK_PANELS[picked!]} with ${DOCK_PANELS[id]}` : `Place ${DOCK_PANELS[picked!]} ${label} ${DOCK_PANELS[id]}`}
+              title={position === 'center' ? 'Swap panels' : `Place ${label}`} className="border p-2 hover:brightness-125"
+              style={panelStyle} onClick={() => move(picked!, id, position)}><Icon className="h-4 w-4" /></button>)}
+          </div>
+        </div>}
+      </div>
       {drop?.panel === id && <div className="dock-drop-preview pointer-events-none" aria-hidden="true" style={{ borderColor: theme.accent, backgroundColor: `${theme.accent}38` }} />}
-      {editing && picked && picked !== id && !drag && <div className="dock-destinations" style={{ backgroundColor: 'var(--app-theme-bg)' }}>
-        <span className="text-center text-[11px]">Move {DOCK_PANELS[picked]} here</span>
-        <div className="flex flex-wrap items-center justify-center gap-1">
-          {destinations.map(({ position, label, icon: Icon }) => <button key={position} type="button"
-            aria-label={position === 'center' ? `Swap ${DOCK_PANELS[picked!]} with ${DOCK_PANELS[id]}` : `Place ${DOCK_PANELS[picked!]} ${label} ${DOCK_PANELS[id]}`}
-            title={position === 'center' ? 'Swap panels' : `Place ${label}`} className="border p-2 hover:brightness-125"
-            style={panelStyle} onClick={() => move(picked!, id, position)}><Icon className="h-4 w-4" /></button>)}
-        </div>
-      </div>}
     </section>;
   };
 
@@ -190,6 +192,6 @@ export function DockWorkspace({ layout, editing, theme, spacing, renderPanel, on
       style={{ minHeight: editing ? dockMinimum(layout.root, Math.max(6, spacing)).height : undefined }}>{render(layout.root)}</div>
     {editing && <p role="status" className="shrink-0 px-1 text-[11px]" style={{ color: theme.textDim }}>{announcement || 'Your changes will be kept when you save the layout. Esc cancels.'}</p>}
     {drag && <div className="dock-drag-label fixed pointer-events-none z-[100] flex items-center gap-1.5 border px-3 py-2 text-xs"
-      style={{ ...panelStyle, borderColor: theme.accent, left: Math.min(drag.x + 16, window.innerWidth - 130), top: Math.min(drag.y + 16, window.innerHeight - 40) }}><GripVertical className="h-3.5 w-3.5" />{DOCK_PANELS[drag.panel]}</div>}
+      style={{ ...panelStyle, borderColor: theme.accent, left: Math.max(8, Math.min(drag.x + 16, window.innerWidth - 150)), top: Math.max(8, Math.min(drag.y + 16, window.innerHeight - 44)) }}><GripVertical className="h-3.5 w-3.5" />{DOCK_PANELS[drag.panel]}</div>}
   </div>;
 }

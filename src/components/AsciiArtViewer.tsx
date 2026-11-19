@@ -76,25 +76,30 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
 
   if (!track) {
     return (
-      <div className="skin-panel flex-1 flex flex-col items-center justify-center p-8 text-xs font-mono select-none" style={{ color: theme.textDim, backgroundColor: 'var(--app-surface-bg)' }}>
+      <div className="artwork-root skin-panel flex-1 flex flex-col items-center justify-center p-4 text-center text-xs font-mono select-none" style={{ color: theme.textDim, backgroundColor: 'var(--app-surface-bg)' }}>
         <p>[ No song selected ]</p>
         <p className="mt-2 text-[11px]">Select a song to see its artwork.</p>
       </div>
     );
   }
 
+  const imageRatio = currentArtwork?.width && currentArtwork?.height
+    ? Math.max(0.25, Math.min(4, currentArtwork.width / currentArtwork.height))
+    : 1;
+  const targetImagePx = Math.round(Math.max(120, asciiConfig.width / 96 * 720));
+
   return (
-    <div role="region" aria-label="Album artwork" className="skin-panel flex-1 flex flex-col min-h-0 min-w-0 relative select-none font-mono overflow-hidden"
+    <div role="region" aria-label="Album artwork" className="artwork-root skin-panel flex-1 flex flex-col min-h-0 min-w-0 relative select-none font-mono overflow-hidden"
       style={{ backgroundColor: 'var(--app-surface-bg)' }}>
       {/* Top Header */}
       <div
-        className="px-4 py-2 border-b flex shrink-0 flex-wrap items-center justify-between gap-2 z-10 text-xs"
+        className="artwork-header px-3 py-2 border-b flex shrink-0 flex-wrap items-center justify-between gap-2 z-10 text-xs"
         style={{
           borderColor: theme.border,
           backgroundColor: 'var(--app-surface-card-bg)',
         }}
       >
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex min-w-0 flex-[1_1_10rem] flex-col gap-0.5">
           <span className="truncate font-bold" title={`${track.title} — ${track.artist}`} style={{ color: theme.highlight }}>
             {sidePanel ? '┌─ Album artwork ─' : `${track.title} — ${track.artist}`}
           </span>
@@ -105,23 +110,23 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
         <div className="flex items-center gap-1.5 flex-wrap">
           <button type="button" aria-label="Display settings" aria-expanded={showControls} aria-controls={controlsId}
             title={`${showControls ? 'Hide' : 'Show'} display settings`} onClick={() => setShowControls(previous => !previous)}
-            className="flex items-center gap-1 border px-2 py-0.5 text-[11px] hover:brightness-125"
+            className="artwork-action-btn flex items-center gap-1 border px-2 py-0.5 text-[11px] hover:brightness-125"
             style={{ borderColor: theme.border, color: showControls ? theme.accent : theme.textDim, backgroundColor: 'var(--app-surface-bg)' }}>
-            {showControls ? <ChevronDown aria-hidden="true" className="h-3 w-3" /> : <ChevronRight aria-hidden="true" className="h-3 w-3" />}
+            {showControls ? <ChevronDown aria-hidden="true" className="h-3 w-3 shrink-0" /> : <ChevronRight aria-hidden="true" className="h-3 w-3 shrink-0" />}
             <span>[Display]</span>
           </button>
 
           {asciiConfig.mode !== 'original_hd' && (
             <button
               onClick={() => setShowOriginal(!showOriginal)}
-              className="px-2 py-0.5 border text-[11px] flex items-center gap-1 hover:brightness-125"
+              className="artwork-action-btn px-2 py-0.5 border text-[11px] flex items-center gap-1 hover:brightness-125"
               style={{
                 borderColor: theme.border,
                 color: showOriginal ? theme.highlight : theme.text,
                 backgroundColor: showOriginal ? 'rgba(255,255,255,0.05)' : theme.bg,
               }}
             >
-              <ImageIcon className="w-3 h-3" />
+              <ImageIcon className="w-3 h-3 shrink-0" />
               <span>{showOriginal ? '[Hide Orig]' : '[Show Orig]'}</span>
             </button>
           )}
@@ -129,14 +134,14 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
           <button
             onClick={handleCopyText}
             disabled={asciiConfig.mode === 'original_hd' && !artworkUrl}
-            className="px-2 py-0.5 border text-[11px] flex items-center gap-1 hover:brightness-125 font-bold"
+            className="artwork-action-btn px-2 py-0.5 border text-[11px] flex items-center gap-1 hover:brightness-125 font-bold"
             style={{
               borderColor: theme.accent,
               color: theme.accent,
               backgroundColor: 'var(--app-surface-bg)',
             }}
           >
-            {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+            {copied ? <Check className="w-3 h-3 shrink-0 text-green-400" /> : <Copy className="w-3 h-3 shrink-0" />}
             <span>
               {copied
                 ? asciiConfig.mode === 'original_hd'
@@ -152,8 +157,8 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
       </div>
 
       <div id={controlsId} role="group" aria-label="Cover art controls" hidden={!showControls}
-        className={`${showControls ? 'grid' : 'hidden'} shrink-0 gap-3 border-b px-4 py-2 text-xs`}
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
+        className={`artwork-controls ${showControls ? 'grid' : 'hidden'} shrink-0 gap-3 border-b px-4 py-2 text-xs`}
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 11.5rem), 1fr))', borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
         <label className="flex min-w-0 flex-col gap-1">
           <span className="text-[10px] font-bold tracking-wider" style={{ color: theme.textDim }}>RENDER MODE</span>
           <span className="relative flex items-center">
@@ -175,7 +180,7 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
           <input aria-label={asciiConfig.mode === 'original_hd' ? 'Cover display size' : 'ASCII width'}
             type="range" min={24} max={96} step={4} value={asciiConfig.width}
             onChange={event => onChangeConfig({ width: Number(event.target.value) })}
-            className="cursor-pointer" style={{ accentColor: theme.accent }} />
+            className="w-full cursor-pointer" style={{ accentColor: theme.accent }} />
         </label>
 
         <label className="flex min-w-0 flex-col gap-1">
@@ -184,10 +189,10 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
           </span>
           <input aria-label="Cover contrast" type="range" min={-50} max={80} step={5} value={asciiConfig.contrast}
             onChange={event => onChangeConfig({ contrast: Number(event.target.value) })}
-            className="cursor-pointer" style={{ accentColor: theme.accent }} />
+            className="w-full cursor-pointer" style={{ accentColor: theme.accent }} />
         </label>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-3 pt-2 text-[11px]">
+        <div className="flex min-w-0 flex-wrap items-center gap-3 pt-1 text-[11px]">
           <label className="flex cursor-pointer items-center gap-1">
             <input type="checkbox" checked={asciiConfig.colorEnabled}
               onChange={event => onChangeConfig({ colorEnabled: event.target.checked })} style={{ accentColor: theme.accent }} />
@@ -210,14 +215,15 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
       {/* Artwork and independently scrolling song details */}
       <ResizableSplit theme={theme} storageKey="lyrics" label="Resize artwork and lyrics"
         rowAt="md" defaultSize={50} minFirst={{ row: 140, column: 100 }} minSecond={{ row: 180, column: 120 }}
-        first={<div className={`flex min-h-0 min-w-0 flex-1 ${sidePanel ? 'flex-col' : 'flex-col md:flex-row'}`}>
+        first={<div className="artwork-pane flex min-h-0 min-w-0 flex-1 flex-col" data-has-side-panel={Boolean(sidePanel)}>
+          <div className="artwork-pane-inner flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Left / Center: Display Area */}
-          <div data-background-region="artwork" className="flex-1 min-h-0 min-w-0 overflow-auto p-4 flex flex-col items-center custom-scrollbar"
+          <div data-background-region="artwork" className="artwork-stage flex-1 min-h-0 min-w-0 overflow-auto p-3 flex flex-col items-center custom-scrollbar"
             style={{ backgroundColor: 'transparent' }}>
             {asciiConfig.mode === 'original_hd' && artworkFailed && !currentArtwork ? (
-              <span className="my-auto text-xs" style={{ color: theme.warning }}>[ Could not load this artwork. ]</span>
+              <span className="my-auto text-xs text-center" style={{ color: theme.warning }}>[ Could not load this artwork. ]</span>
             ) : (asciiConfig.mode === 'original_hd' ? !currentArtwork : isLoading) ? (
-              <div className="my-auto flex flex-col items-center gap-2" style={{ color: theme.warning }}>
+              <div className="my-auto flex flex-col items-center gap-2 text-center" style={{ color: theme.warning }}>
                 <div className="animate-spin text-lg">⚙</div>
                 <span className="text-xs">
                   {asciiConfig.mode === 'original_hd'
@@ -228,17 +234,17 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
             ) : asciiConfig.mode === 'original_hd' ? (
               /* High-Definition Original Image Canvas */
               <div
-                className="skin-artwork-frame my-auto shrink-0 p-3 border rounded-none max-w-full flex flex-col items-center gap-2.5 shadow-2xl transition-all"
+                className="artwork-frame skin-artwork-frame my-auto shrink-0 p-2.5 border rounded-none max-w-full flex flex-col items-center gap-2 shadow-2xl transition-all"
                 style={{
                   borderColor: theme.accent,
                   backgroundColor: 'var(--app-surface-bg)',
                   boxShadow: `0 0 30px ${theme.accentGlow}`,
                 }}
               >
-                <div className="w-full flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-mono border-b pb-1.5" style={{ borderColor: theme.border }}>
-                  <div className="flex items-center gap-1.5">
-                    {showArtworkIcon && <Sparkles className="w-3.5 h-3.5" style={{ color: theme.accent }} />}
-                    <span className="font-bold uppercase tracking-wider" style={{ color: theme.highlight }}>
+                <div className="artwork-frame-header w-full flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] font-mono border-b pb-1.5" style={{ borderColor: theme.border }}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {showArtworkIcon && <Sparkles className="w-3.5 h-3.5 shrink-0" style={{ color: theme.accent }} />}
+                    <span className="font-bold uppercase tracking-wider truncate" style={{ color: theme.highlight }}>
                       ┌─ Album artwork ─┐
                     </span>
                   </div>
@@ -248,13 +254,13 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
                   <img
                     src={artworkUrl}
                     alt={track.title}
-                    className="max-h-[65vh] max-w-full object-contain"
+                    className="block max-w-full h-auto object-contain"
                     style={{
                       filter: `contrast(${asciiConfig.contrast + 100}%) brightness(${100 + asciiConfig.brightness * 10}%) ${asciiConfig.inverted ? 'invert(1)' : ''} ${!asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
-                      width: `${Math.min(currentArtwork?.width || 800, Math.max(220, asciiConfig.width / 96 * 800))}px`,
+                      width: `min(${targetImagePx}px, max(72px, calc(100cqw - 2.25rem)), max(72px, calc((100cqh - var(--artwork-chrome-h, 4.5rem)) * ${imageRatio.toFixed(4)})))`,
                     }}
                   />
-                  <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 p-1 border text-[10px]" style={{ borderColor: theme.border }}>
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-black/85 p-1 border text-[10px]" style={{ borderColor: theme.border }}>
                     <a
                       href={artworkUrl}
                       target="_blank"
@@ -271,12 +277,14 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
 
               </div>
             ) : asciiResult && asciiResult.lines.length > 0 ? (
-              <div className="my-auto shrink-0 p-2 border rounded-none max-w-full overflow-x-auto" style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
+              <div className="artwork-frame my-auto shrink-0 p-2 border rounded-none max-w-full overflow-x-auto" style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
                 <pre
-                  className="font-mono text-[9px] sm:text-[10px] md:text-[11px] leading-[9px] sm:leading-[10px] md:leading-[11px] select-all whitespace-pre tracking-normal"
+                  className="artwork-art-pre font-mono select-all whitespace-pre tracking-normal"
                   style={{
-                    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
-                  }}
+                    fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, monospace',
+                    '--ascii-cols': asciiResult.width || asciiResult.lines[0]?.length || 48,
+                    '--ascii-rows': asciiResult.lines.length || 24,
+                  } as React.CSSProperties}
                 >
                   {asciiResult.lines.map((line, lIdx) => (
                     <div key={lIdx} className="flex">
@@ -303,20 +311,21 @@ export const AsciiArtViewer: React.FC<AsciiArtViewerProps> = ({
           {showOriginal && asciiConfig.mode !== 'original_hd' && (
             <div
               role="region" aria-label="Original artwork preview"
-              className={`${sidePanel ? 'w-full border-t max-h-48' : 'w-full md:w-72 border-t md:border-t-0 md:border-l'} shrink-0 p-4 text-xs overflow-y-auto`}
+              className="artwork-orig-preview w-full border-t max-h-48 shrink-0 p-3 text-xs overflow-y-auto custom-scrollbar"
               style={{
                 borderColor: theme.border,
                 backgroundColor: 'var(--app-surface-card-bg)',
               }}
             >
               <div className="border p-1" style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-bg)' }}>
-                <img src={artworkUrl || track.thumbnailUrl} alt={`Original artwork for ${track.title}`} className="w-full h-40 object-cover" />
-                <div className="text-[9px] text-center mt-1" style={{ color: theme.textDim }}>
+                <img src={artworkUrl || track.thumbnailUrl} alt={`Original artwork for ${track.title}`} className="w-full max-h-36 object-contain" />
+                <div className="text-[9px] text-center mt-1 truncate" style={{ color: theme.textDim }}>
                   {track.album || track.title}
                 </div>
               </div>
             </div>
           )}
+          </div>
         </div>}
 
         second={sidePanel ? <aside aria-label="Song details and lyrics"

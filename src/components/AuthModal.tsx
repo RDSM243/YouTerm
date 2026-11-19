@@ -106,7 +106,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   return (
     <div className={embedded ? '' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 font-mono select-none overflow-y-auto'}>
       <div
-        className={embedded ? 'flex flex-col gap-4 text-xs' : 'w-full max-w-xl border p-5 shadow-2xl relative flex flex-col gap-4 text-xs my-auto'}
+        className={embedded ? 'flex flex-col gap-4 text-xs' : 'w-full max-w-xl max-h-[92dvh] overflow-y-auto custom-scrollbar border p-4 sm:p-5 shadow-2xl relative flex flex-col gap-4 text-xs my-auto'}
         style={embedded ? { color: theme.text } : {
           borderColor: theme.accent,
           backgroundColor: theme.cardBg,
@@ -114,22 +114,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         }}
       >
         {/* Header */}
-        {!embedded && <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: theme.border }}>
-          <div className="flex items-center gap-2 font-bold text-sm" style={{ color: theme.highlight }}>
-            <ShieldCheck className="w-4 h-4" style={{ color: theme.accent }} />
-            <span>┌─ YouTube Music Backend & Account Connection ─</span>
+        {!embedded && <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2" style={{ borderColor: theme.border }}>
+          <div className="flex min-w-0 flex-1 items-center gap-2 font-bold text-sm" style={{ color: theme.highlight }}>
+            <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: theme.accent }} />
+            <span className="truncate">┌─ YouTube Music Backend & Account Connection ─</span>
           </div>
           <button
             onClick={onClose}
-            className="hover:opacity-80 px-2 py-0.5 border"
+            className="shrink-0 hover:opacity-80 px-2 py-0.5 border"
             style={{ borderColor: theme.border, color: theme.textDim }}
           >
             [Esc / Close]
           </button>
         </div>}
 
-        {embedded && <div className="flex items-center justify-between gap-3 border p-3" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-          <div className="min-w-0">
+        {embedded && <div className="flex flex-wrap items-center justify-between gap-3 border p-3" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
+          <div className="min-w-0 flex-1">
             <p className="font-bold" style={{ color: theme.highlight }}>{session.isLoggedIn ? 'Connected to YouTube Music' : 'Log in to YouTube Music'}</p>
             <p className="mt-1 break-words" style={{ color: theme.textDim }}>{session.isLoggedIn ? session.email || session.username : 'Connect your Google account to sync playlists and liked songs.'}</p>
           </div>
@@ -156,7 +156,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <form onSubmit={handleSave} className="flex flex-col gap-3">
           {/* Google Access Token */}
           <div className="flex flex-col gap-1">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-center gap-1">
               <label className="text-[11px] font-bold" style={{ color: theme.textDim }}>
                 GOOGLE / YOUTUBE OAUTH ACCESS TOKEN (OPTIONAL):
               </label>
@@ -166,7 +166,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               type="password"
               value={accessToken}
               onChange={(e) => setAccessToken(e.target.value)}
-              className="border p-1.5 outline-none font-mono"
+              className="w-full min-w-0 border p-1.5 outline-none font-mono"
               style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
               placeholder="ya29.a0AfH6SM... (paste token to sync private playlists & liked songs)"
             />
@@ -177,7 +177,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {/* YouTube Data API Key */}
           <div className="flex flex-col gap-1">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-center gap-1">
               <label className="text-[11px] font-bold" style={{ color: theme.textDim }}>
                 YOUTUBE DATA API v3 KEY (OPTIONAL):
               </label>
@@ -187,7 +187,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              className="border p-1.5 outline-none font-mono"
+              className="w-full min-w-0 border p-1.5 outline-none font-mono"
               style={{ borderColor: theme.border, backgroundColor: theme.bg, color: theme.text }}
               placeholder="AIzaSy... (leave blank to use high-speed backend search scraper)"
             />
@@ -195,7 +195,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           {/* Google OAuth & Sync Actions */}
           <div className="border p-3 flex flex-col gap-2" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-center gap-1">
               <span className="font-bold flex items-center gap-1.5" style={{ color: theme.accent }}>
                 <LogIn className="w-3.5 h-3.5" />
                 <span>YouTube Account Sync & OAuth:</span>
@@ -259,7 +259,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
 
           {/* Action buttons */}
-          <div className="flex justify-end gap-2 pt-2 border-t" style={{ borderColor: theme.border }}>
+          <div className="flex flex-wrap justify-end gap-2 pt-2 border-t" style={{ borderColor: theme.border }}>
             {!embedded && <button
               type="button"
               onClick={onClose}

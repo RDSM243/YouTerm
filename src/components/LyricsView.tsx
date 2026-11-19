@@ -68,18 +68,18 @@ export const LyricsView: React.FC<LyricsViewProps> = ({ theme, track, currentTim
 
   const synced = !!lyrics?.lines.some(line => line.text);
   return (
-    <section aria-label="Song lyrics" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden select-text font-mono">
-      {track && <dl aria-label="Song information" className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1.5 border-b px-3 py-3 text-[11px]"
+    <section aria-label="Song lyrics" className="lyrics-root flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden select-text font-mono">
+      {track && <dl aria-label="Song information" className="lyrics-meta grid shrink-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1.5 border-b px-3 py-2.5 text-[11px]"
         style={{ borderColor: theme.border }}>
         <dt style={{ color: theme.textDim }}>Title:</dt>
         <dd className="min-w-0 break-words font-bold" style={{ color: theme.highlight }}>{track.title}</dd>
         <dt style={{ color: theme.textDim }}>Artist:</dt>
         <dd className="min-w-0 break-words" style={{ color: theme.text }}>{track.artist}</dd>
-        {track.album && <><dt style={{ color: theme.textDim }}>Album:</dt>
-          <dd className="min-w-0 break-words" style={{ color: theme.text }}>{track.album}</dd></>}
+        {track.album && <><dt className="lyrics-meta-album" style={{ color: theme.textDim }}>Album:</dt>
+          <dd className="lyrics-meta-album min-w-0 break-words" style={{ color: theme.text }}>{track.album}</dd></>}
       </dl>}
 
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-[11px]"
+      <header className="lyrics-header flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-[11px]"
         style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-card-bg)' }}>
         <h2 className="font-bold" style={{ color: theme.highlight }}>┌─ Lyrics ─</h2>
         {synced && !follow && <button type="button" onClick={() => setFollow(true)}
@@ -89,7 +89,7 @@ export const LyricsView: React.FC<LyricsViewProps> = ({ theme, track, currentTim
 
       <div ref={scroller} tabIndex={0} aria-label="Lyrics content" onWheel={pauseFollow} onTouchMove={pauseFollow}
         onKeyDown={event => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) { pauseFollow(); event.stopPropagation(); } }}
-        className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3" style={{ color: theme.text }}>
+        className="lyrics-scroller custom-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-3" style={{ color: theme.text }}>
         {!track ? <p role="status" className="text-center text-xs" style={{ color: theme.textDim }}>[ Select a song to see its lyrics. ]</p>
           : status === 'loading' ? <p role="status" className="flex items-center justify-center gap-2 text-xs" style={{ color: theme.textDim }}>
             <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" /> Looking for lyrics…</p>
@@ -100,21 +100,21 @@ export const LyricsView: React.FC<LyricsViewProps> = ({ theme, track, currentTim
           </div>
           : !lyrics ? <p role="status" className="text-center text-xs" style={{ color: theme.textDim }}>[ No lyrics found for this song. ]</p>
           : lyrics.instrumental ? <p role="status" className="text-center text-xs" style={{ color: theme.textDim }}>[ Instrumental — no lyrics. ]</p>
-          : synced ? <div className="space-y-1 pb-16">
+          : synced ? <div className="lyrics-synced-list space-y-1 pb-16">
             {lyrics.lines.map((line, index) => <button type="button" key={`${line.time}-${index}`}
               ref={index === activeIndex ? activeLine : null} aria-current={index === activeIndex ? 'true' : undefined}
               aria-label={`Seek to ${Math.floor(line.time / 60)}:${String(Math.floor(line.time % 60)).padStart(2, '0')}: ${line.text || 'Instrumental break'}`}
               onClick={() => { onSeek(line.time); setFollow(true); }}
-              className={`flex w-full items-start gap-1.5 px-1 py-1.5 text-left text-xs leading-relaxed hover:brightness-125 focus-visible:outline focus-visible:outline-1 ${index === activeIndex ? 'font-bold' : ''}`}
+              className={`flex w-full min-w-0 items-start gap-1.5 px-1 py-1.5 text-left text-xs leading-relaxed hover:brightness-125 focus-visible:outline focus-visible:outline-1 ${index === activeIndex ? 'font-bold' : ''}`}
               style={{ color: index === activeIndex ? theme.highlight : theme.textDim, outlineColor: theme.accent }}>
               <ChevronRight className={`mt-0.5 h-3 w-3 shrink-0 ${index === activeIndex ? '' : 'invisible'}`} style={{ color: theme.accent }} aria-hidden="true" />
-              <span className="whitespace-pre-line">{line.text || '♪'}</span>
+              <span className="min-w-0 flex-1 break-words whitespace-pre-line">{line.text || '♪'}</span>
             </button>)}
           </div>
-          : <div className="whitespace-pre-wrap text-xs leading-loose">{lyrics.plainText}</div>}
+          : <div className="min-w-0 break-words whitespace-pre-wrap text-xs leading-loose">{lyrics.plainText}</div>}
       </div>
 
-      {track && status === 'ready' && lyrics && <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-[10px]"
+      {track && status === 'ready' && lyrics && <footer className="lyrics-footer flex shrink-0 flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-[10px]"
         style={{ borderColor: theme.border, color: theme.textDim }}>
         <a href="https://lrclib.net" target="_blank" rel="noopener noreferrer"
           onClick={event => { event.preventDefault(); openExternal('https://lrclib.net'); }} className="hover:underline">Lyrics from LRCLIB</a>

@@ -2,20 +2,81 @@ import type { CSSProperties } from 'react';
 import type { SkinConfig } from '../types';
 import { normalizeDockLayout } from './dockLayout';
 
-export const DEFAULT_SKIN: SkinConfig = {
+export type PanelStyleConfig = Pick<
+  SkinConfig,
+  | 'panelRadius'
+  | 'controlRadius'
+  | 'artworkRadius'
+  | 'panelGap'
+  | 'borderWidth'
+  | 'shadow'
+  | 'controlStyle'
+  | 'progressStyle'
+>;
+
+export type LayoutSkinConfig = Pick<
+  SkinConfig,
+  'sidebar' | 'playerPosition' | 'showHeader' | 'layout'
+>;
+
+export const DEFAULT_PANEL_STYLE: PanelStyleConfig = {
   panelRadius: 0,
   controlRadius: 0,
   artworkRadius: 0,
   panelGap: 0,
   borderWidth: 1,
   shadow: 'none',
-  sidebar: 'left',
-  playerPosition: 'bottom',
   controlStyle: 'terminal',
   progressStyle: 'ascii',
+};
+
+export const DEFAULT_LAYOUT_SKIN: LayoutSkinConfig = {
+  sidebar: 'left',
+  playerPosition: 'bottom',
   showHeader: true,
   layout: null,
 };
+
+export const DEFAULT_SKIN: SkinConfig = {
+  ...DEFAULT_PANEL_STYLE,
+  ...DEFAULT_LAYOUT_SKIN,
+};
+
+const PANEL_STYLE_KEYS: readonly (keyof PanelStyleConfig)[] = [
+  'panelRadius',
+  'controlRadius',
+  'artworkRadius',
+  'panelGap',
+  'borderWidth',
+  'shadow',
+  'controlStyle',
+  'progressStyle',
+];
+
+export function pickPanelStyle(skin: PanelStyleConfig): PanelStyleConfig {
+  return {
+    panelRadius: skin.panelRadius,
+    controlRadius: skin.controlRadius,
+    artworkRadius: skin.artworkRadius,
+    panelGap: skin.panelGap,
+    borderWidth: skin.borderWidth,
+    shadow: skin.shadow,
+    controlStyle: skin.controlStyle,
+    progressStyle: skin.progressStyle,
+  };
+}
+
+export function isPanelStyleEqual(a: PanelStyleConfig, b: PanelStyleConfig): boolean {
+  return PANEL_STYLE_KEYS.every(key => a[key] === b[key]);
+}
+
+export function skinShadowValue(shadow: SkinConfig['shadow']): string {
+  return shadow === 'deep'
+    ? '0 12px 36px rgba(0, 0, 0, 0.45)'
+    : shadow === 'soft'
+      ? '0 4px 16px rgba(0, 0, 0, 0.2)'
+      : 'none';
+}
 
 export function normalizeSkin(value: unknown): SkinConfig {
   const input = value && typeof value === 'object' && !Array.isArray(value)
@@ -53,7 +114,6 @@ export function skinVariables(skin: SkinConfig): CSSProperties {
     '--skin-artwork-radius': `${skin.artworkRadius}px`,
     '--skin-gap': `${skin.panelGap}px`,
     '--skin-border-width': `${skin.borderWidth}px`,
-    '--skin-shadow': skin.shadow === 'deep' ? '0 12px 36px rgba(0, 0, 0, 0.45)'
-      : skin.shadow === 'soft' ? '0 4px 16px rgba(0, 0, 0, 0.2)' : 'none',
+    '--skin-shadow': skinShadowValue(skin.shadow),
   } as CSSProperties;
 }

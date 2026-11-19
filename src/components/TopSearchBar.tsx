@@ -12,6 +12,8 @@ interface TopSearchBarProps {
   onOpenAuth: () => void;
   onOpenSettings: () => void;
   isModalOpen: boolean;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
+  focusSearchHint?: string;
   compactNavigation?: boolean;
   viewMode: TuiViewMode;
   onChangeViewMode: (view: TuiViewMode) => void;
@@ -30,6 +32,8 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   onOpenAuth,
   onOpenSettings,
   isModalOpen,
+  searchInputRef,
+  focusSearchHint = '/',
   compactNavigation = false,
   viewMode,
   onChangeViewMode,
@@ -37,16 +41,12 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   isLayoutEditing,
   hasCustomLayout,
 }) => {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const internalInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = searchInputRef ?? internalInputRef;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isModalOpen) return;
-      // '/' focuses search if not already in an input
-      if (e.key === '/' && document.activeElement !== inputRef.current) {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
       // Esc blurs search
       if (e.key === 'Escape' && document.activeElement === inputRef.current) {
         inputRef.current?.blur();
@@ -54,21 +54,21 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isModalOpen]);
+  }, [isModalOpen, inputRef]);
 
   return (
     <div
-      className="app-search skin-panel flex shrink-0 items-center justify-between gap-2 px-3 py-1.5 border-b text-xs select-none"
+      className="app-search skin-panel flex shrink-0 flex-wrap items-center justify-between gap-2 px-3 py-1.5 border-b text-xs select-none"
       style={{
         borderColor: theme.border,
         backgroundColor: 'var(--app-surface-card-bg)',
       }}
     >
       {/* Search Input with Box Border */}
-      <form onSubmit={onSearchSubmit} className="min-w-0 flex-1 flex items-center gap-2 max-w-2xl">
-        <span style={{ color: theme.accent }} className="font-bold flex items-center gap-1">
-          <Search className="w-3.5 h-3.5" />
-          <span>Search:</span>
+      <form onSubmit={onSearchSubmit} className="min-w-0 flex-[1_1_13rem] flex items-center gap-2 max-w-2xl">
+        <span style={{ color: theme.accent }} className="font-bold flex shrink-0 items-center gap-1">
+          <Search className="w-3.5 h-3.5 shrink-0" />
+          <span className="search-prefix-label">Search:</span>
         </span>
         <div
           className="skin-field min-w-0 flex-1 flex items-center px-2 py-0.5 border rounded-none transition-colors"
@@ -80,17 +80,19 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
           <input
             ref={inputRef}
             type="text"
+            aria-label="Search tracks, albums, or artists"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Type song, album or artist name... (Press '/' to focus, 'Enter' to search)"
-            className="w-full bg-transparent outline-none text-xs"
+            placeholder={`Type song, album or artist name... (Press '${focusSearchHint}' to focus, 'Enter' to search)`}
+            className="w-full min-w-0 bg-transparent outline-none text-xs"
             style={{ color: theme.text }}
           />
           {searchQuery && (
             <button
               type="button"
+              aria-label="Clear search"
               onClick={() => onSearchChange('')}
-              className="text-[10px] px-1 hover:opacity-80"
+              className="text-[10px] px-1 shrink-0 hover:opacity-80"
               style={{ color: theme.textDim }}
             >
               [×]
@@ -100,16 +102,16 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
       </form>
 
       {/* Right Quick Action Status Badges */}
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
         <button type="button" aria-label="Edit layout" disabled={isLayoutEditing || isModalOpen} onClick={onEditLayout}
-          className="flex items-center gap-1 border px-2 py-1 text-[11px] disabled:opacity-40"
+          className="flex items-center gap-1 border px-2 py-1 text-[11px] whitespace-nowrap disabled:opacity-40"
           style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.accent }} title="Arrange panels by dragging">
-          <LayoutDashboard className="h-3.5 w-3.5" /><span className="hidden sm:inline">Edit layout</span>
+          <LayoutDashboard className="h-3.5 w-3.5 shrink-0" /><span className="search-action-label">Edit layout</span>
         </button>
         {compactNavigation && <select aria-label="Player view" value={viewMode}
           disabled={isLayoutEditing}
           onChange={event => onChangeViewMode(event.target.value as TuiViewMode)}
-          className="max-w-28 border px-2 py-1 text-[11px]" style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text }}>
+          className="max-w-32 border px-2 py-1 text-[11px]" style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text }}>
           <option value="tracklist">Tracks</option><option value="ascii_cover">Cover</option>
           <option value="split">Split view</option><option value="visualizer">Spectrum</option>
           {hasCustomLayout && <option value="custom">Custom layout</option>}
@@ -117,7 +119,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
         {/* Loading Indicator */}
         {isLoading ? (
           <div
-            className="px-2 py-0.5 border animate-pulse text-[11px]"
+            className="px-2 py-0.5 border animate-pulse whitespace-nowrap text-[11px]"
             style={{
               borderColor: theme.warning,
               color: theme.warning,
@@ -130,6 +132,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
 
         {!session?.isLoggedIn && <button
           type="button"
+          aria-label="Log in"
           onClick={onOpenAuth}
           className="px-2 py-0.5 border flex items-center gap-1 whitespace-nowrap hover:brightness-125 transition-all text-[11px]"
           title="Log in to your YouTube Music account"
@@ -139,8 +142,8 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
             backgroundColor: 'var(--app-surface-bg)',
           }}
         >
-          <LogIn className="w-3 h-3" />
-          <span>Log in</span>
+          <LogIn className="w-3 h-3 shrink-0" />
+          <span className="search-login-label">Log in</span>
         </button>}
 
         <button

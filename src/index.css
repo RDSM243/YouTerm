@@ -224,27 +224,107 @@ input[type="search"] {
   outline-offset: 2px;
 }
 
-/* Playback adapts to the width of its docked panel, including side columns. */
-.app-player { container-type: inline-size; }
-@container (min-width: 700px) {
-  .player-row { flex-direction: row; }
-  .player-track, .player-volume { width: 30%; }
+/* Touch-friendly split handle hit targets */
+@media (pointer: coarse) {
+  .resize-handle[data-direction="row"] { min-width: 12px; }
+  .resize-handle[data-direction="column"] { min-height: 12px; }
 }
 
+/* Header & Search adapt to their own inline size */
+.app-header { container: app-header / inline-size; }
+@container app-header (max-width: 46rem) {
+  .app-header { padding: 0.3rem 0.5rem; gap: 0.35rem 0.65rem; }
+  .header-shortcut-affix { display: none; }
+  .header-tab { padding: 0.15rem 0.45rem; }
+}
+@container app-header (max-width: 28rem) {
+  .app-version, .header-custom-suffix { display: none; }
+}
+
+.app-search { container: app-search / inline-size; }
+@container app-search (max-width: 38rem) {
+  .app-search { padding: 0.35rem 0.5rem; }
+  .search-action-label { display: none; }
+}
+@container app-search (max-width: 30rem) {
+  .search-prefix-label { display: none; }
+}
+@container app-search (max-width: 24rem) {
+  .search-login-label { display: none; }
+}
+
+/* Playback adapts to the width of its docked panel and container height. */
+.app-player { container: app-player / inline-size; }
+.player-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45rem;
+  padding: 0.5rem 0.625rem;
+}
+.player-track { grid-column: 1; min-width: 0; }
+.player-timeline { grid-column: 1; min-width: 0; max-width: none; }
+.player-volume { grid-column: 1; width: 100%; justify-content: center; }
+.player-volume-controls { max-width: 100%; }
+.player-volume-slider { flex: 1 1 auto; min-width: 3.5rem; max-width: 12rem; }
+.player-timeline-bar { container: player-bar / inline-size; }
+.player-remaining { display: none; }
+
+@container player-bar (min-width: 21rem) {
+  .player-remaining { display: inline; }
+}
+
+@container app-player (max-width: 18rem) {
+  .player-row { padding: 0.4rem 0.45rem; gap: 0.35rem; }
+  .player-controls { gap: 0.25rem; }
+  .play-toggle { padding: 0.2rem 0.45rem; }
+  .play-toggle-label { display: none; }
+  .player-time-current { width: auto; min-width: 2.2rem; }
+}
+
+@container app-player (min-width: 30rem) {
+  .player-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.45rem 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .player-track { grid-column: 1; grid-row: 1; }
+  .player-volume { grid-column: 2; grid-row: 1; width: auto; justify-content: flex-end; }
+  .player-volume-slider { flex: 0 0 auto; width: 5.25rem; }
+  .player-timeline { grid-column: 1 / -1; grid-row: 2; }
+}
+
+@container app-player (min-width: 45rem) {
+  .player-row {
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 1.55fr) minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+  }
+  .player-track { grid-column: 1; grid-row: 1; }
+  .player-timeline { grid-column: 2; grid-row: 1; max-width: 38rem; justify-self: center; }
+  .player-volume { grid-column: 3; grid-row: 1; justify-self: end; }
+}
+
+@container dock-slot (max-height: 5.5rem) {
+  .app-player .player-row { padding-block: 0.28rem; gap: 0.25rem 0.65rem; }
+  .app-player .play-toggle { padding-block: 0.15rem; }
+  [data-control-style="minimal"] .app-player .play-toggle { width: 30px; height: 30px; }
+}
+
+/* Dock workspace & panels */
 .dock-workspace { gap: max(6px, var(--skin-gap, 0px)); }
 .dock-workspace[data-editing="true"] { overflow: auto; }
 .dock-workspace[data-editing="true"] > .dock-tree { flex-shrink: 0; }
 .dock-tree { overflow: hidden; }
 .dock-panel { position: relative; background: var(--app-surface-bg); }
-.dock-panel-content { overflow: auto; }
+.dock-panel-content { container: dock-slot / size; overflow: auto; }
 .youterm .dock-panel-content > .skin-panel {
   border: 0;
   border-radius: 0;
   box-shadow: none;
 }
-.dock-panel-content > .app-player { flex: 1 0 auto; }
-.dock-panel[data-dock-panel="artwork"] .dock-panel-content > .skin-panel { min-height: 300px; }
-.dock-panel[data-dock-panel="lyrics"] .dock-panel-content > section { min-height: 220px; }
+.dock-panel-content > :not(.app-player) { flex: 1 1 0%; min-height: 0; min-width: 0; }
+.dock-panel-content > .app-player { flex: 1 0 auto; justify-content: safe center; }
 .dock-grip { cursor: grab; touch-action: none; user-select: none; }
 .dock-panel-heading { position: relative; z-index: 21; }
 .dock-panel[data-picked="true"] { outline: 2px solid var(--app-accent); outline-offset: -2px; }
@@ -255,5 +335,188 @@ input[type="search"] {
 [data-drop="top"] > .dock-drop-preview { inset: 0 0 50%; }
 [data-drop="bottom"] > .dock-drop-preview { inset: 50% 0 0; }
 [data-drop="center"] > .dock-drop-preview { inset: 4px; }
-.dock-destinations { position: absolute; inset: 30px 0 0; z-index: 22; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 4px; opacity: 0.96; overflow: auto; }
+.dock-destinations { position: absolute; inset: 0; z-index: 22; display: flex; flex-direction: column; align-items: safe center; justify-content: safe center; gap: 6px; padding: 6px; opacity: 0.96; overflow: auto; }
 .dock-toolbar button:disabled { cursor: default; }
+
+/* Sidebar adapts from narrow vertical rail to multi-column horizontal strip */
+.sidebar-root { container: sidebar / inline-size; }
+.sidebar-library-section,
+.sidebar-playlists-section { container: sidebar-section / inline-size; }
+@container sidebar (max-width: 14rem) {
+  .sidebar-header { padding-inline: 0.5rem; gap: 0.25rem; }
+  .sidebar-rule, .sidebar-corner { display: none; }
+  .sidebar-focused-tag { font-size: 9px; }
+  .sidebar-item, .sidebar-actions { padding-inline: 0.5rem; }
+}
+@container sidebar (min-width: 28rem) {
+  .sidebar-sections[data-dual="true"] {
+    display: grid;
+    grid-template-columns: minmax(11rem, 0.85fr) minmax(0, 1.15fr);
+  }
+  .youterm .sidebar-sections[data-dual="true"] > .sidebar-library-section {
+    max-height: none;
+    border-bottom-width: 0;
+    border-right-width: var(--skin-border-width, 1px);
+  }
+}
+@container sidebar-section (min-width: 26rem) {
+  .sidebar-section-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+    align-content: start;
+  }
+}
+@container dock-slot (max-height: 12rem) {
+  .sidebar-header, .sidebar-actions, .sidebar-item { padding-block: 0.2rem; }
+}
+
+/* Track list adapts its columns, header hints and watermark to panel width & height */
+.tracklist-root { container: tracklist / inline-size; }
+.tracklist-count-short, .tracklist-count-full, .tracklist-hint { display: none; }
+.tracklist-grid {
+  grid-template-columns: 2rem 1.75rem minmax(0, 1fr) 3.6rem;
+  gap: 0.375rem;
+  padding-inline: 0.5rem;
+}
+.tracklist-col-artist, .tracklist-col-album, .tracklist-inline-play { display: none; }
+.tracklist-inline-artist { display: block; }
+.tracklist-watermark-img { max-width: min(270px, 42cqw); max-height: min(250px, 70%); }
+
+@container tracklist (max-width: 19rem) {
+  .tracklist-header { padding: 0.35rem 0.5rem; }
+  [data-album-watermark] { display: none; }
+}
+@container dock-slot (max-height: 11rem) {
+  [data-album-watermark] { display: none; }
+}
+@container tracklist (min-width: 18rem) and (max-width: 27.99rem) {
+  .tracklist-count-short { display: inline; }
+}
+@container tracklist (min-width: 28rem) {
+  .tracklist-count-full { display: inline; }
+}
+@container tracklist (min-width: 44rem) {
+  .tracklist-hint { display: block; flex: 0 1 auto; max-width: 55%; }
+}
+@container tracklist (min-width: 24rem) {
+  .tracklist-grid {
+    grid-template-columns: 2.25rem 1.75rem minmax(0, 1.55fr) minmax(0, 1fr) 4rem;
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+  .tracklist-col-artist { display: block; }
+  .tracklist-inline-play { display: inline; }
+  .tracklist-inline-artist { display: none; }
+}
+@container tracklist (min-width: 54rem) {
+  .tracklist-grid {
+    grid-template-columns: 2.5rem 2rem minmax(0, 1.7fr) minmax(0, 1.1fr) minmax(0, 0.95fr) 4.5rem;
+    padding-inline: 1rem;
+  }
+  .tracklist-col-album { display: block; }
+}
+
+/* Artwork panel scales ASCII & HD cover art continuously to fit available space */
+.artwork-root { container: artwork-root / size; }
+.artwork-pane { container: artwork-pane / inline-size; }
+.artwork-stage {
+  container: artwork-stage / size;
+  --artwork-chrome-h: 4.5rem;
+  align-items: safe center;
+  justify-content: safe center;
+}
+.artwork-art-pre {
+  font-size: clamp(
+    3.5px,
+    min(
+      calc((100cqw - 2.5rem) / (max(1, var(--ascii-cols, 48)) * 0.64)),
+      calc((100cqh - 2.5rem) / max(1, var(--ascii-rows, 24)))
+    ),
+    13px
+  );
+  line-height: 1;
+}
+@container artwork-root (max-width: 22rem) {
+  .artwork-header { padding: 0.35rem 0.5rem; }
+  .artwork-action-btn { padding: 0.15rem 0.375rem; font-size: 10px; }
+  .artwork-controls { padding: 0.4rem 0.5rem; gap: 0.5rem; }
+}
+@container artwork-root (max-height: 22rem) {
+  .artwork-header { padding: 0.3rem 0.5rem; gap: 0.35rem; }
+  .artwork-controls { padding: 0.35rem 0.5rem; gap: 0.4rem 0.65rem; max-height: 36%; overflow-y: auto; }
+}
+@container artwork-pane (min-width: 32rem) {
+  .artwork-pane[data-has-side-panel="false"] .artwork-pane-inner { flex-direction: row; }
+  .youterm .artwork-pane[data-has-side-panel="false"] .artwork-orig-preview {
+    width: 15rem;
+    max-height: none;
+    border-top-width: 0;
+    border-left-width: var(--skin-border-width, 1px);
+  }
+}
+@container artwork-stage (max-height: 14rem) {
+  .artwork-stage { padding: 0.35rem; --artwork-chrome-h: 2rem; }
+  .artwork-frame { padding: 0.35rem; gap: 0.35rem; }
+  .artwork-frame-header { display: none; }
+}
+@container artwork-stage (max-width: 16rem) {
+  .artwork-stage { padding: 0.35rem; }
+  .artwork-frame { padding: 0.35rem; }
+}
+
+/* Lyrics panel adapts metadata density to width and height */
+.lyrics-root { container: lyrics-panel / size; }
+@container lyrics-panel (min-width: 28rem) {
+  .lyrics-meta {
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 0.25rem 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+}
+@container lyrics-panel (max-height: 15rem) {
+  .lyrics-meta { padding: 0.35rem 0.6rem; gap: 0.15rem 0.5rem; }
+  .lyrics-header, .lyrics-footer { padding: 0.3rem 0.6rem; }
+  .lyrics-scroller { padding: 0.45rem 0.6rem; }
+  .lyrics-synced-list { padding-bottom: 1.5rem; }
+}
+@container lyrics-panel (max-height: 10.5rem) {
+  .lyrics-meta-album { display: none; }
+}
+@container lyrics-panel (max-width: 15rem) {
+  .lyrics-meta, .lyrics-header, .lyrics-footer, .lyrics-scroller { padding-inline: 0.5rem; }
+}
+
+/* Spectrum visualizer header & VU meters adapt to container width & height */
+.spectrum-root { container: spectrum / size; }
+.spectrum-title-short, .spectrum-telemetry-extra { display: none; }
+@container spectrum (max-width: 26rem) {
+  .spectrum-header { padding: 0.35rem 0.5rem; gap: 0.35rem; }
+  .spectrum-title-full { display: none; }
+  .spectrum-title-short { display: inline; }
+}
+@container spectrum (max-width: 22rem) {
+  .spectrum-mode-btn { padding-inline: 0.375rem; }
+  .spectrum-mode-label { display: none; }
+  .spectrum-canvas-wrap { padding: 0.35rem; }
+  .spectrum-footer { padding: 0.35rem 0.5rem; gap: 0.35rem; }
+}
+@container spectrum (min-width: 20rem) {
+  .spectrum-meters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container spectrum (min-width: 40rem) {
+  .spectrum-footer { flex-direction: row; align-items: center; }
+  .spectrum-meters { display: flex; width: auto; flex-wrap: nowrap; }
+  .spectrum-vu-group { flex: 0 0 auto; }
+  .spectrum-vu-bar { width: 7.5rem; flex: 0 0 auto; }
+  .spectrum-telemetry { justify-content: flex-end; }
+}
+@container spectrum (min-width: 48rem) {
+  .spectrum-vu-bar { width: 9rem; }
+  .spectrum-telemetry-extra { display: block; }
+}
+@container spectrum (max-height: 14rem) {
+  .spectrum-header { padding: 0.25rem 0.5rem; gap: 0.25rem; }
+  .spectrum-canvas-wrap { padding: 0.25rem; }
+  .spectrum-footer { padding: 0.25rem 0.5rem; gap: 0.25rem; }
+  .spectrum-telemetry-fft { display: none; }
+}

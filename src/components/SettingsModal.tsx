@@ -1,20 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, HelpCircle, LayoutPanelLeft, Palette, Settings, Sliders, User, Volume2, X } from 'lucide-react';
-import type { SidebarPreferences, ThemeConfig, UserSession } from '../types';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDown, Keyboard, LayoutPanelLeft, Palette, Settings, Sliders, User, Volume2, X } from 'lucide-react';
+import type { ShortcutBindings, SidebarPreferences, ThemeConfig, UserSession } from '../types';
 import { LIBRARY_ITEMS } from '../data/library';
 import { DEFAULT_SIDEBAR_PREFERENCES } from '../services/sidebarStorage';
 import type { PlayerPreferences } from '../services/libraryStorage';
 import { AuthModal } from './AuthModal';
-import { HelpModal } from './HelpModal';
+import { ShortcutsSettings } from './ShortcutsSettings';
 import { ThemeModal, type ThemeModalProps } from './ThemeModal';
 
 const TABS = [
   { id: 'general', label: 'General', icon: LayoutPanelLeft, description: 'Album artwork and sidebar sections.' },
-  { id: 'appearance', label: 'Appearance', icon: Sliders, description: 'Skins, shapes, layout, background, fonts and effects.' },
-  { id: 'themes', label: 'Themes', icon: Palette, description: 'Customize colors or import and export a complete skin.' },
+  { id: 'appearance', label: 'Appearance', icon: Sliders, description: 'Panel style, layout, background, typography and effects.' },
+  { id: 'themes', label: 'Themes', icon: Palette, description: 'Customize color palettes, terminal prompt, or import and export themes.' },
   { id: 'playback', label: 'Playback', icon: Volume2, description: 'Playback volume, mute and audio format.' },
   { id: 'account', label: 'Account', icon: User, description: 'Connect to YouTube Music and manage library sync.' },
-  { id: 'help', label: 'Help', icon: HelpCircle, description: 'Keyboard shortcuts for playback and navigation.' },
+  { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard, description: 'View and customize keyboard shortcuts for playback and navigation.' },
 ] as const;
 
 export type SettingsTab = typeof TABS[number]['id'];
@@ -31,6 +31,8 @@ interface SettingsModalProps extends Omit<ThemeModalProps, 'embedded' | 'section
   onSaveSession: (session: UserSession) => void;
   onSyncAccount: (session?: UserSession) => Promise<string>;
   onDisconnect: () => void;
+  shortcuts: ShortcutBindings;
+  onChangeShortcuts: (shortcuts: ShortcutBindings) => void;
 }
 
 interface SelectSettingProps {
@@ -60,8 +62,8 @@ const ToggleSetting = ({ theme, label, description, checked, onChange, disabled 
   theme: ThemeConfig; label: string; description?: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean;
 }) => (
   <label className="flex cursor-pointer items-start gap-3 border p-3" style={{ borderColor: theme.border, backgroundColor: theme.bg }}>
-    <input aria-label={label} type="checkbox" checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} className="mt-0.5" style={{ accentColor: theme.accent }} />
-    <span><span className="block font-bold">{label}</span>
+    <input aria-label={label} type="checkbox" checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} className="mt-0.5 shrink-0" style={{ accentColor: theme.accent }} />
+    <span className="min-w-0 flex-1"><span className="block font-bold">{label}</span>
       {description && <span className="mt-1 block text-[11px]" style={{ color: theme.textDim }}>{description}</span>}
     </span>
   </label>
@@ -83,13 +85,17 @@ const RangeSetting = ({ theme, label, value, min, max, step = 1, displayValue, o
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   initialTab, sidebarPreferences, onChangeSidebarPreferences, preferences, onChangePreferences, isChangingFormat,
-  session, onSaveSession, onSyncAccount, onDisconnect, onClose, ...themeProps
+  session, onSaveSession, onSyncAccount, onDisconnect, shortcuts, onChangeShortcuts, onClose, ...themeProps
 }) => {
   const theme = themeProps.currentTheme;
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
   const dialogRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
+  const isRecordingShortcutRef = useRef(false);
+  const handleRecordingChange = useCallback((recording: boolean) => {
+    isRecordingShortcutRef.current = recording;
+  }, []);
   const currentTab = TABS.find(tab => tab.id === activeTab)!;
   const panelStyle = { borderColor: theme.border, backgroundColor: theme.bg, color: theme.text };
 
@@ -99,6 +105,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialogRef.current?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (isRecordingShortcutRef.current) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -125,21 +132,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => { scrollRef.current?.scrollTo(0, 0); }, [activeTab]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-6 font-mono"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 sm:p-5 font-mono"
       style={{ '--app-surface-bg': theme.bg, '--app-surface-card-bg': theme.cardBg } as React.CSSProperties}
       onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="settings-title"
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden border text-xs shadow-2xl"
+        className="flex max-h-[92dvh] w-full max-w-4xl flex-col overflow-hidden border text-xs shadow-2xl"
         style={{ borderColor: theme.accent, backgroundColor: theme.cardBg, color: theme.text, boxShadow: `0 0 30px ${theme.accentGlow}` }}>
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b p-4" style={{ borderColor: theme.border }}>
-          <h2 id="settings-title" className="flex items-center gap-2 text-sm font-bold" style={{ color: theme.highlight }}>
-            <Settings className="h-4 w-4" style={{ color: theme.accent }} /> Settings
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b p-3 sm:p-4" style={{ borderColor: theme.border }}>
+          <h2 id="settings-title" className="flex min-w-0 items-center gap-2 text-sm font-bold truncate" style={{ color: theme.highlight }}>
+            <Settings className="h-4 w-4 shrink-0" style={{ color: theme.accent }} /> Settings
           </h2>
           <button type="button" onClick={onClose} aria-label="Close settings" title="Close settings (Esc)"
-            className="border p-1.5 hover:brightness-125" style={panelStyle}><X className="h-3.5 w-3.5" /></button>
+            className="shrink-0 border p-1.5 hover:brightness-125" style={panelStyle}><X className="h-3.5 w-3.5" /></button>
         </div>
 
-        <div role="tablist" aria-label="Settings categories" className="flex shrink-0 flex-wrap gap-1 border-b p-3" style={{ borderColor: theme.border }}>
+        <div role="tablist" aria-label="Settings categories" className="flex shrink-0 flex-wrap gap-1 border-b p-2.5 sm:p-3" style={{ borderColor: theme.border }}>
           {TABS.map((tab, index) => <button key={tab.id} type="button" role="tab" id={`settings-tab-${tab.id}`}
             aria-controls="settings-panel" aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1}
             onClick={() => setActiveTab(tab.id)}
@@ -155,9 +162,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               setActiveTab(next);
               dialogRef.current?.querySelector<HTMLButtonElement>(`#settings-tab-${next}`)?.focus();
             }}
-            className="flex items-center gap-1.5 whitespace-nowrap border px-3 py-2 hover:brightness-125"
+            className="flex items-center gap-1.5 whitespace-nowrap border px-2.5 py-1.5 sm:px-3 sm:py-2 hover:brightness-125"
             style={{ ...panelStyle, borderColor: activeTab === tab.id ? theme.accent : theme.border, color: activeTab === tab.id ? theme.highlight : theme.textDim }}>
-            <tab.icon className="h-3.5 w-3.5" />{tab.label}
+            <tab.icon className="h-3.5 w-3.5 shrink-0" />{tab.label}
           </button>)}
         </div>
 
@@ -209,9 +216,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {activeTab === 'account' && <AuthModal theme={theme} session={session} onSaveSession={onSaveSession}
             onSyncAccount={onSyncAccount} onDisconnect={onDisconnect} onClose={onClose} embedded />}
 
-          {activeTab === 'help' && <HelpModal theme={theme} onClose={onClose} embedded />}
+          {activeTab === 'shortcuts' && (
+            <ShortcutsSettings
+              theme={theme}
+              shortcuts={shortcuts}
+              onChangeShortcuts={onChangeShortcuts}
+              onRecordingChange={handleRecordingChange}
+            />
+          )}
         </div>
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t px-4 py-3 text-[11px]" style={{ borderColor: theme.border, color: theme.textDim }}>
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t px-4 py-3 text-[11px]" style={{ borderColor: theme.border, color: theme.textDim }}>
           <span>Changes apply immediately.</span>
           <button type="button" onClick={onClose} className="shrink-0 border px-3 py-1 hover:brightness-125" style={panelStyle}>Close [Esc]</button>
         </div>

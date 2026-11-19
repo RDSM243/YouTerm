@@ -22,11 +22,11 @@ Se estiver usando outra máquina, instale as dependências do projeto com `npm i
 ## Experimentar a personalização
 
 1. Abra **Settings → Appearance**.
-2. Experimente **Terminal**, **Rounded** e **Cover Focus**. O último fica mais evidente depois de selecionar uma música.
+2. Em **Panel Style**, experimente **Terminal** e **Rounded** e confirme que o tema de cores e o layout atual não mudam.
 3. Ajuste os cantos dos painéis, botões e capas, o espaço entre painéis, as bordas e as sombras. A prévia acompanha as mudanças.
-4. Experimente a lateral à direita ou oculta, o player no topo e a barra de progresso contínua. Mesmo sem o cabeçalho, o seletor de visualização continua disponível junto à busca.
-5. Use **Undo / redo look** para alternar com o ajuste anterior, ou **Reset shapes & layout** para restaurar a geometria original.
-6. Em **Themes → Save current look**, dê um nome e salve o visual para reaplicar depois. **Export skin** gera um JSON completo. **Import JSON** restaura os visuais novos e continua aceitando os temas antigos de cores. Os arquivos de imagem de fundo não são incluídos; importe a imagem separadamente no dispositivo de destino.
+4. Use **Undo / redo** para alternar com o ajuste anterior de estilo, ou **Reset panel style** para restaurar apenas a geometria e controles originais.
+5. Em **Layout**, experimente a lateral à direita ou oculta, o player no topo e o cabeçalho. Mesmo sem o cabeçalho, o seletor de visualização continua disponível junto à busca. Use **Reset layout** para restaurar só a organização padrão.
+6. Em **Themes**, crie temas de cores com **New custom theme** e teste **Export theme** / **Import JSON** para confirmar que temas alteram apenas paleta e prompt, sem sobrescrever estilo ou layout.
 
 As alterações ficam salvas no perfil de teste. Para encerrar, feche a janela do player; o comando retorna ao terminal. Também pode interrompê-lo com **Ctrl+C** no terminal. Para testar alterações posteriores no código, execute `npm run app:debug` de novo.
 
@@ -40,7 +40,7 @@ As alterações ficam salvas no perfil de teste. Para encerrar, feche a janela d
 
 Também é possível organizar os painéis pelo teclado: foque a alça de um painel, pressione **Enter** e depois escolha um dos botões de destino apresentados nos outros painéis. **Ctrl+Z** desfaz e **Ctrl+Shift+Z** refaz durante a edição.
 
-O layout salvo reaparece em **Custom layout**, no seletor de visualização, e é restaurado ao abrir o player. As posições e proporções acompanham **Save current look**, **Export skin** e **Import JSON**. Fora do editor, redimensionar um divisor salva o novo tamanho automaticamente. A reprodução continua durante a edição.
+O layout salvo reaparece em **Custom layout**, no seletor de visualização, e é restaurado ao abrir o player. Fora do editor, redimensionar um divisor salva o novo tamanho automaticamente e independe do **Panel Style** ou do **Theme** ativo. A reprodução continua durante a edição.
 
 ## Somente compilar
 

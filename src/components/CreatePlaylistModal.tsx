@@ -47,9 +47,9 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 font-mono select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3 sm:p-4 font-mono select-none overflow-y-auto">
       <div
-        className="w-full max-w-md border p-5 shadow-2xl relative flex flex-col gap-4 text-xs"
+        className="w-full max-w-md max-h-[92dvh] overflow-y-auto custom-scrollbar border p-4 sm:p-5 shadow-2xl relative flex flex-col gap-4 text-xs my-auto"
         style={{
           borderColor: theme.accent,
           backgroundColor: theme.cardBg,
@@ -58,16 +58,17 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between border-b pb-2"
+          className="flex flex-wrap items-center justify-between gap-2 border-b pb-2"
           style={{ borderColor: theme.border }}
         >
-          <div className="flex items-center gap-2 font-bold text-sm" style={{ color: theme.highlight }}>
-            <FolderPlus className="w-4 h-4" style={{ color: theme.accent }} />
-            <span>┌─ {heading} ─────────────────────────┐</span>
+          <div className="flex min-w-0 flex-1 items-center gap-2 font-bold text-sm" style={{ color: theme.highlight }}>
+            <FolderPlus className="w-4 h-4 shrink-0" style={{ color: theme.accent }} />
+            <span className="truncate">┌─ {heading} ─</span>
+            <span aria-hidden="true" className="min-w-0 flex-1 overflow-hidden whitespace-nowrap font-normal opacity-60">────────────────────</span>
           </div>
           <button
             onClick={onClose}
-            className="hover:opacity-80 px-2 py-0.5 border text-[11px]"
+            className="shrink-0 hover:opacity-80 px-2 py-0.5 border text-[11px]"
             style={{ borderColor: theme.border, color: theme.textDim }}
           >
             [Esc]
@@ -127,7 +128,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: theme.border }}>
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t" style={{ borderColor: theme.border }}>
             <button
               type="button"
               onClick={onClose}

@@ -220,3 +220,31 @@ export interface UserSession {
   avatarUrl?: string;
   connectedAt?: string;
 }
+
+export type ShortcutActionId =
+  | 'playPause'
+  | 'moveDown'
+  | 'moveUp'
+  | 'selectTrack'
+  | 'nextTrack'
+  | 'prevTrack'
+  | 'toggleLike'
+  | 'focusSearch'
+  | 'switchFocus'
+  | 'viewTracklist'
+  | 'viewCover'
+  | 'viewSplit'
+  | 'viewVisualizer'
+  | 'toggleShuffle'
+  | 'cycleRepeat'
+  | 'toggleMute'
+  | 'volumeUp'
+  | 'volumeDown'
+  | 'seekBackward'
+  | 'seekForward'
+  | 'contextMenu'
+  | 'importPlaylist'
+  | 'cycleTheme'
+  | 'openShortcuts';
+
+export type ShortcutBindings = Record<ShortcutActionId, string[]>;

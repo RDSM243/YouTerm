@@ -12,7 +12,7 @@ interface ResizableSplitProps {
   first: React.ReactNode;
   second: React.ReactNode;
   showFirst?: boolean;
-  rowAt?: 'md' | 'lg';
+  rowAt?: 'md' | 'lg' | number;
   unit?: 'pixels' | 'percent';
   defaultSize: Size;
   minFirst: Size;
@@ -26,6 +26,8 @@ interface ResizableSplitProps {
 }
 
 const sizeFor = (size: Size, direction: Direction) => typeof size === 'number' ? size : size[direction];
+const rowThresholdFor = (rowAt?: 'md' | 'lg' | number) =>
+  typeof rowAt === 'number' ? rowAt : rowAt === 'md' ? 440 : rowAt === 'lg' ? 620 : 0;
 
 export function ResizableSplit({
   theme, storageKey, label, regionLabel, first, second, showFirst = true, rowAt,
@@ -34,8 +36,10 @@ export function ResizableSplit({
   axis, value, onValueChange,
 }: ResizableSplitProps) {
   const key = `youterm_layout_${storageKey}_v1`;
-  const query = rowAt ? `(min-width: ${rowAt === 'md' ? 48 : 64}rem)` : null;
-  const [wide, setWide] = useState(() => !query || window.matchMedia(query).matches);
+  const rowThreshold = rowThresholdFor(rowAt);
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const measuredWidth = containerSize.width || (typeof window !== 'undefined' ? window.innerWidth : 1024);
+  const wide = !rowThreshold || measuredWidth >= rowThreshold;
   const direction: Direction = axis || (wide ? 'row' : 'column');
   const [sizes, setSizes] = useState<Partial<Record<Direction, number>>>(() => {
     try {
@@ -52,27 +56,23 @@ export function ResizableSplit({
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; start: number; size: number } | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [extent, setExtent] = useState(0);
   const firstId = useId();
-
-  useEffect(() => {
-    if (!query) return;
-    const media = window.matchMedia(query);
-    const update = () => setWide(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, [query]);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const measure = () => setExtent(direction === 'row' ? container.clientWidth : container.clientHeight);
+    const measure = () => {
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+      setContainerSize(prev => (prev.width === width && prev.height === height ? prev : { width, height }));
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [direction]);
+  }, []);
+
+  const extent = direction === 'row' ? containerSize.width : containerSize.height;
 
   useEffect(() => {
     setDragging(false);

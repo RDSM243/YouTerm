@@ -134,8 +134,8 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
       // Handle Canvas Sizing with HiDPI / devicePixelRatio
       const rect = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      const displayWidth = Math.max(100, Math.floor(rect.width));
-      const displayHeight = Math.max(100, Math.floor(rect.height));
+      const displayWidth = Math.max(24, Math.floor(rect.width));
+      const displayHeight = Math.max(24, Math.floor(rect.height));
 
       if (canvas.width !== displayWidth * dpr || canvas.height !== displayHeight * dpr) {
         canvas.width = displayWidth * dpr;
@@ -365,19 +365,31 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
         }
       }
 
-      // Margins for grid & labels
-      const leftMargin = 48;
-      const rightMargin = 20;
-      const topMargin = 24;
-      const bottomMargin = 28;
-      const plotWidth = width - leftMargin - rightMargin;
-      const plotHeight = height - topMargin - bottomMargin;
+      // Margins for grid & labels (adapt smoothly to narrow or shallow panels)
+      const compactW = width < 320;
+      const tinyW = width < 220 || height < 72;
+      const compactH = height < 180;
+      const tinyH = height < 120;
+      const leftMargin = tinyW ? 10 : compactW ? 34 : 48;
+      const rightMargin = compactW ? 10 : 20;
+      const topMargin = tinyH ? 8 : compactH ? 14 : 24;
+      const bottomMargin = tinyH ? 10 : compactH ? 20 : 28;
+      const plotWidth = Math.max(24, width - leftMargin - rightMargin);
+      const plotHeight = Math.max(24, height - topMargin - bottomMargin);
 
       // Draw Background Terminal Grid Lines (dB markers)
       ctx.lineWidth = 1;
-      ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+      ctx.font = `${compactW ? 9 : 10}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
 
-      for (const marker of DB_MARKERS) {
+      const visibleMarkers = plotHeight < 48
+        ? []
+        : plotHeight < 84
+          ? DB_MARKERS.filter(m => m.db === 0 || m.db === -48)
+          : compactH
+            ? DB_MARKERS.filter(m => m.db === 0 || m.db === -12 || m.db === -24 || m.db === -48)
+            : DB_MARKERS;
+
+      for (const marker of visibleMarkers) {
         // Map dB (0 to -48) to Y
         const normY = Math.abs(marker.db) / 48;
         const y = topMargin + normY * plotHeight;
@@ -392,42 +404,51 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
         ctx.setLineDash([]);
 
         // dB text label on left
-        ctx.fillStyle = marker.db === 0 ? theme.error : theme.textDim;
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(marker.label, leftMargin - 6, y);
+        if (!tinyW) {
+          ctx.fillStyle = marker.db === 0 ? theme.error : theme.textDim;
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(compactW ? marker.label.replace('dB', '') : marker.label, leftMargin - 5, y);
+        }
       }
 
       // ==========================================
       // MODE 1: GRAPHIC EQUALIZER SPECTRUM BARS (Segmented LED Quadradinhos)
       // ==========================================
       if (mode === 'bars') {
-        const barTotalWidth = plotWidth / NUM_BARS;
+        const activeBars = plotWidth < NUM_BARS * 4
+          ? Math.max(12, Math.floor(plotWidth / 4))
+          : NUM_BARS;
+        const barTotalWidth = plotWidth / activeBars;
         const gap = Math.max(1, Math.min(3, Math.floor(barTotalWidth * 0.22)));
-        const barWidth = Math.max(2, barTotalWidth - gap);
+        const barWidth = Math.max(1.5, barTotalWidth - gap);
 
-        const segmentHeight = 6;
-        const segmentGap = 2;
+        const segmentHeight = plotHeight < 110 ? 4 : 6;
+        const segmentGap = plotHeight < 110 ? 1.5 : 2;
         const totalSegmentUnit = segmentHeight + segmentGap;
-        const totalSegments = Math.floor(plotHeight / totalSegmentUnit);
+        const totalSegments = Math.max(4, Math.floor(plotHeight / totalSegmentUnit));
 
-        for (let i = 0; i < NUM_BARS; i++) {
+        for (let i = 0; i < activeBars; i++) {
+          const bandStart = Math.floor((i * NUM_BARS) / activeBars);
+          const bandEnd = Math.max(bandStart + 1, Math.floor(((i + 1) * NUM_BARS) / activeBars));
+          let valSum = 0;
+          let peakMax = 0;
+          for (let b = bandStart; b < bandEnd; b++) {
+            valSum += bars[b];
+            if (peaks[b] > peakMax) peakMax = peaks[b];
+          }
           const x = leftMargin + i * barTotalWidth;
-          const val = bars[i];
+          const val = valSum / (bandEnd - bandStart);
           const activeSegments = val * totalSegments;
           const fullSegments = Math.floor(activeSegments);
           const frac = activeSegments - fullSegments;
-          const peakSegment = Math.round(peaks[i] * totalSegments);
+          const peakSegment = Math.round(peakMax * totalSegments);
 
           // Draw vertical segmented LED / ASCII quadradinhos
           for (let s = 0; s < totalSegments; s++) {
             const segmentY = topMargin + plotHeight - (s + 1) * totalSegmentUnit;
             const segRatio = s / totalSegments;
 
-            // Authentic 3-zone color scheme matching dB markers:
-            // > -6dB (ratio >= 0.875): Red / Error
-            // -12dB to -6dB (0.75 <= ratio < 0.875): Amber / Warning
-            // < -12dB (ratio < 0.75): Green / Accent
             let segColor: string;
             if (segRatio >= 0.875) {
               segColor = theme.error;
@@ -441,14 +462,12 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
               ctx.fillStyle = segColor;
               ctx.fillRect(x, segmentY, barWidth, segmentHeight);
             } else if (s === fullSegments && frac > 0.08) {
-              // Smooth sub-segment partial alpha: enables silky fluid transitions between quadradinhos
               ctx.save();
               ctx.globalAlpha = Math.min(1.0, frac * 1.25);
               ctx.fillStyle = segColor;
               ctx.fillRect(x, segmentY, barWidth, segmentHeight);
               ctx.restore();
             } else {
-              // Unfilled subtle terminal LED slot
               ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
               ctx.fillRect(x, segmentY, barWidth, segmentHeight);
             }
@@ -464,21 +483,25 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
         }
 
         // Draw Frequency Axis Labels (Logarithmically Placed)
-        ctx.fillStyle = theme.textDim;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
+        if (!tinyH) {
+          ctx.fillStyle = theme.textDim;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          const freqStep = plotWidth < 200 ? 3 : plotWidth < 340 ? 2 : 1;
 
-        for (const iso of ISO_FREQUENCIES) {
-          const logFraction = Math.log(iso.freq / MIN_FREQ) / Math.log(MAX_FREQ / MIN_FREQ);
-          if (logFraction >= 0 && logFraction <= 1) {
-            const x = leftMargin + logFraction * plotWidth;
-            ctx.strokeStyle = theme.border;
-            ctx.beginPath();
-            ctx.moveTo(x, topMargin + plotHeight);
-            ctx.lineTo(x, topMargin + plotHeight + 4);
-            ctx.stroke();
-            ctx.fillText(iso.label, x, topMargin + plotHeight + 6);
-          }
+          ISO_FREQUENCIES.forEach((iso, idx) => {
+            if (idx % freqStep !== 0) return;
+            const logFraction = Math.log(iso.freq / MIN_FREQ) / Math.log(MAX_FREQ / MIN_FREQ);
+            if (logFraction >= 0 && logFraction <= 1) {
+              const x = leftMargin + logFraction * plotWidth;
+              ctx.strokeStyle = theme.border;
+              ctx.beginPath();
+              ctx.moveTo(x, topMargin + plotHeight);
+              ctx.lineTo(x, topMargin + plotHeight + 4);
+              ctx.stroke();
+              ctx.fillText(iso.label, x, topMargin + plotHeight + 5);
+            }
+          });
         }
       }
 
@@ -530,15 +553,24 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
         }
 
         // Oscilloscope HUD Info
-        ctx.fillStyle = theme.highlight;
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
-        ctx.fillText('OSCILLOSCOPE: 2048-PT TIME-DOMAIN PCM TRACE', leftMargin + 8, topMargin + 8);
+        if (!tinyH) {
+          ctx.fillStyle = theme.highlight;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          const hudLabel = plotWidth >= 320
+            ? 'OSCILLOSCOPE: 2048-PT TIME-DOMAIN PCM TRACE'
+            : 'OSCILLOSCOPE: PCM';
+          ctx.fillText(hudLabel, leftMargin + 6, topMargin + 6);
+        }
 
-        ctx.fillStyle = theme.textDim;
-        ctx.fillText('+1.0V (0dBFS)', leftMargin - 6, topMargin);
-        ctx.fillText(' 0.0V (GND)', leftMargin - 6, centerY);
-        ctx.fillText('-1.0V (-inf)', leftMargin - 6, topMargin + plotHeight);
+        if (!tinyW) {
+          ctx.fillStyle = theme.textDim;
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(compactW ? '+1V' : '+1.0V', leftMargin - 5, topMargin);
+          ctx.fillText(compactW ? '0V' : '0.0V', leftMargin - 5, centerY);
+          ctx.fillText(compactW ? '-1V' : '-1.0V', leftMargin - 5, topMargin + plotHeight);
+        }
       }
 
       // ==========================================
@@ -546,15 +578,20 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
       // ==========================================
       else if (mode === 'matrix') {
         const drops = matrixDropsRef.current;
-        const colWidth = plotWidth / NUM_BARS;
+        const activeCols = plotWidth < NUM_BARS * 8
+          ? Math.max(10, Math.floor(plotWidth / 9))
+          : NUM_BARS;
+        const colWidth = plotWidth / activeCols;
 
-        ctx.font = '11px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+        ctx.font = `${compactW ? 10 : 11}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
         ctx.textAlign = 'center';
 
-        for (let i = 0; i < Math.min(drops.length, NUM_BARS); i++) {
-          const drop = drops[i];
+        for (let i = 0; i < activeCols; i++) {
+          const srcIdx = Math.min(drops.length - 1, Math.floor((i * NUM_BARS) / activeCols));
+          const drop = drops[srcIdx];
+          if (!drop) continue;
           const x = leftMargin + i * colWidth + colWidth / 2;
-          const energy = bars[i];
+          const energy = bars[srcIdx];
 
           // Advance drop based on band energy + base speed
           if (hasSignal) {
@@ -570,7 +607,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
           const startRow = Math.floor(drop.y);
 
           for (let r = 0; r < 14; r++) {
-            const charIndex = (r + i) % drop.chars.length;
+            const charIndex = (r + srcIdx) % drop.chars.length;
             const char = drop.chars[charIndex];
             const charY = topMargin + (startRow - r) * 14;
 
@@ -594,22 +631,36 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
         ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
         ctx.fillRect(leftMargin, topMargin, plotWidth, plotHeight);
 
+        const boxWidth = Math.min(380, Math.max(88, plotWidth - 12));
+        const boxHeight = Math.min(48, Math.max(24, plotHeight - 10));
+        const boxX = leftMargin + (plotWidth - boxWidth) / 2;
+        const boxY = topMargin + (plotHeight - boxHeight) / 2;
+
         ctx.strokeStyle = theme.border;
-        ctx.strokeRect(leftMargin + plotWidth / 2 - 190, topMargin + plotHeight / 2 - 24, 380, 48);
+        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
         ctx.fillStyle = surfaceColor(theme.bg, surfaceOpacity);
-        ctx.fillRect(leftMargin + plotWidth / 2 - 189, topMargin + plotHeight / 2 - 23, 378, 46);
+        ctx.fillRect(boxX + 1, boxY + 1, Math.max(0, boxWidth - 2), Math.max(0, boxHeight - 2));
 
         ctx.fillStyle = isPlaying ? theme.warning : theme.highlight;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = 'bold 12px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+        const bannerFontPx = boxWidth < 220 ? 10 : boxWidth < 320 ? 11 : 12;
+        ctx.font = `bold ${bannerFontPx}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
 
-        if (isPlaying) {
-          ctx.fillText('⏳ BUFFERING / AWAITING PCM AUDIO STREAM...', leftMargin + plotWidth / 2, topMargin + plotHeight / 2);
-        } else {
-          ctx.fillText('○ [ STANDBY ] PLAY TRACK TO ACTIVATE SPECTRUM', leftMargin + plotWidth / 2, topMargin + plotHeight / 2);
-        }
+        const bannerText = isPlaying
+          ? boxWidth >= 340
+            ? '⏳ BUFFERING / AWAITING PCM AUDIO STREAM...'
+            : boxWidth >= 180
+              ? '⏳ BUFFERING PCM STREAM...'
+              : '⏳ BUFFERING'
+          : boxWidth >= 350
+            ? '○ [ STANDBY ] PLAY TRACK TO ACTIVATE SPECTRUM'
+            : boxWidth >= 200
+              ? '○ [ STANDBY ] PLAY TRACK'
+              : '○ STANDBY';
+
+        ctx.fillText(bannerText, leftMargin + plotWidth / 2, topMargin + plotHeight / 2, Math.max(40, boxWidth - 12));
       }
 
       ctx.restore();
@@ -620,8 +671,18 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
 
     animFrameRef.current = requestAnimationFrame(render);
 
+    // Re-render paused/standby canvas cleanly whenever its container is resized.
+    const resizeObserver = new ResizeObserver(() => {
+      if (!isPlaying && running) {
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = requestAnimationFrame(render);
+      }
+    });
+    resizeObserver.observe(canvas);
+
     return () => {
       running = false;
+      resizeObserver.disconnect();
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [mode, isPlaying, theme, sensitivity, maxFrameRate, surfaceOpacity]);
@@ -634,29 +695,36 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
     <div
       ref={containerRef}
       data-background-region="spectrum" data-background-enabled={showBackground}
-      className="skin-panel flex-1 flex flex-col min-h-0 relative select-none font-mono overflow-hidden text-xs w-full h-full"
+      className="spectrum-root skin-panel flex-1 flex flex-col min-h-0 min-w-0 relative select-none font-mono overflow-hidden text-xs w-full h-full"
       style={{ backgroundColor: showBackground ? 'transparent' : theme.bg,
         ...(!showBackground ? { '--app-surface-bg': theme.bg, '--app-surface-card-bg': theme.cardBg } : {}) } as React.CSSProperties}
     >
       {/* Top Header Bar */}
       <div
-        className="px-3 py-2 border-b flex items-center justify-between z-10 flex-wrap gap-2"
+        className="spectrum-header px-3 py-2 border-b flex shrink-0 items-center justify-between z-10 flex-wrap gap-2"
         style={{
           borderColor: theme.border,
           backgroundColor: 'var(--app-surface-card-bg)',
         }}
       >
-        <div className="flex items-center gap-2 truncate">
-          <Activity className="w-4 h-4 animate-pulse" style={{ color: theme.accent }} />
-          <span className="font-bold text-xs" style={{ color: theme.highlight }}>
+        <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-2">
+          <Activity className="w-4 h-4 shrink-0 animate-pulse" style={{ color: theme.accent }} />
+          <span className="spectrum-title-full min-w-0 truncate font-bold text-xs" style={{ color: theme.highlight }}>
             {mode === 'bars'
               ? '┌─ Real-time 56-Band FFT Audio Equalizer ─'
               : mode === 'wave'
               ? '┌─ Real-time Audio Oscilloscope Waveform ─'
               : '┌─ Real-time Frequency Matrix Waterfall ─'}
           </span>
+          <span className="spectrum-title-short min-w-0 truncate font-bold text-xs" style={{ color: theme.highlight }}>
+            {mode === 'bars'
+              ? '┌─ Spectrum EQ ─'
+              : mode === 'wave'
+              ? '┌─ Oscilloscope ─'
+              : '┌─ Matrix ─'}
+          </span>
           <span
-            className="px-2 py-0.5 border text-[10px] font-bold"
+            className="min-w-0 max-w-full truncate shrink px-2 py-0.5 border text-[10px] font-bold"
             style={{
               borderColor: isPlaying ? theme.accent : theme.border,
               color: isPlaying ? theme.accent : theme.textDim,
@@ -679,7 +747,7 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
               savePlayerPreferences({ spectrumSensitivity: nextSensitivity });
             }}
             title="Adjust visualizer gain / automatic sensitivity"
-            className="px-2 py-0.5 border hover:brightness-125 transition-all text-[10px]"
+            className="px-2 py-0.5 border hover:brightness-125 transition-all text-[10px] whitespace-nowrap"
             style={{
               borderColor: sensitivity === 0 ? theme.accent : theme.border,
               color: sensitivity === 0 ? theme.highlight : theme.textDim,
@@ -690,23 +758,24 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
           </button>
 
           {(['bars', 'wave', 'matrix'] as const).map(value => (
-            <button key={value} type="button" aria-pressed={mode === value}
+            <button key={value} type="button" aria-label={`Visualizer mode: ${value}`} aria-pressed={mode === value}
+              title={`Mode: ${value}`}
               onClick={() => { setMode(value); savePlayerPreferences({ spectrumMode: value }); }}
-              className="px-2.5 py-0.5 border uppercase font-bold hover:brightness-125 transition-all flex items-center gap-1"
+              className="spectrum-mode-btn px-2 py-0.5 border uppercase font-bold hover:brightness-125 transition-all flex items-center gap-1"
               style={{ borderColor: mode === value ? theme.accent : theme.border,
                 color: mode === value ? theme.highlight : theme.textDim,
                 backgroundColor: mode === value ? 'rgba(255,255,255,0.08)' : 'var(--app-surface-bg)' }}>
-              {value === 'bars' && <BarChart2 className="w-3 h-3" />}
-              {value === 'wave' && <Waves className="w-3 h-3" />}
-              {value === 'matrix' && <Cpu className="w-3 h-3" />}
-              <span>[{value}]</span>
+              {value === 'bars' && <BarChart2 className="w-3 h-3 shrink-0" />}
+              {value === 'wave' && <Waves className="w-3 h-3 shrink-0" />}
+              {value === 'matrix' && <Cpu className="w-3 h-3 shrink-0" />}
+              <span className="spectrum-mode-label">[{value}]</span>
             </button>
           ))}
         </div>
       </div>
 
       {/* Main Full-Size Visualization Canvas Area */}
-      <div className="flex-1 min-h-0 w-full relative overflow-hidden flex flex-col p-2 sm:p-3">
+      <div className="spectrum-canvas-wrap flex-1 min-h-0 w-full relative overflow-hidden flex flex-col p-2.5">
         <div
           className="flex-1 w-full h-full min-h-0 border relative flex flex-col shadow-inner overflow-hidden"
           style={{ borderColor: theme.border, backgroundColor: surfaceOpacity < 1 ? 'transparent' : '#040608' }}
@@ -721,18 +790,18 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
 
       {/* Bottom Live Acoustic Metrics & Stereo VU Meter */}
       <div
-        className="px-3 py-2 border-t flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px]"
+        className="spectrum-footer px-3 py-2 border-t flex flex-col items-stretch justify-between gap-2 text-[11px] shrink-0"
         style={{
           borderColor: theme.border,
           backgroundColor: 'var(--app-surface-card-bg)',
         }}
       >
         {/* Left: Stereo VU Meters */}
-        <div className="flex items-center gap-4 w-full sm:w-auto">
+        <div className="spectrum-meters grid grid-cols-1 gap-x-4 gap-y-1 w-full">
           {/* L Channel */}
-          <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-            <span className="font-bold text-[10px]" style={{ color: theme.accent }}>L:</span>
-            <div className="w-28 sm:w-36 h-2.5 border bg-black/60 relative overflow-hidden" style={{ borderColor: theme.border }}>
+          <div className="spectrum-vu-group flex items-center gap-1.5 min-w-0">
+            <span className="font-bold text-[10px] shrink-0" style={{ color: theme.accent }}>L:</span>
+            <div className="spectrum-vu-bar min-w-[1.5rem] flex-1 h-2.5 border bg-black/60 relative overflow-hidden" style={{ borderColor: theme.border }}>
               <div
                 className="h-full transition-all duration-75"
                 style={{
@@ -741,15 +810,15 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
                 }}
               />
             </div>
-            <span className="text-[10px] w-12 font-mono text-right" style={{ color: theme.textDim }}>
+            <span className="text-[10px] w-auto min-w-[2.4rem] shrink-0 font-mono text-right" style={{ color: theme.textDim }}>
               {rmsDb <= -90 ? '-inf' : `${rmsDb}dB`}
             </span>
           </div>
 
           {/* R Channel */}
-          <div className="flex items-center gap-1.5 flex-1 sm:flex-initial">
-            <span className="font-bold text-[10px]" style={{ color: theme.accent }}>R:</span>
-            <div className="w-28 sm:w-36 h-2.5 border bg-black/60 relative overflow-hidden" style={{ borderColor: theme.border }}>
+          <div className="spectrum-vu-group flex items-center gap-1.5 min-w-0">
+            <span className="font-bold text-[10px] shrink-0" style={{ color: theme.accent }}>R:</span>
+            <div className="spectrum-vu-bar min-w-[1.5rem] flex-1 h-2.5 border bg-black/60 relative overflow-hidden" style={{ borderColor: theme.border }}>
               <div
                 className="h-full transition-all duration-75"
                 style={{
@@ -758,31 +827,31 @@ export const SpectrumVisualizer: React.FC<SpectrumVisualizerProps> = ({
                 }}
               />
             </div>
-            <span className="text-[10px] w-12 font-mono text-right" style={{ color: theme.textDim }}>
+            <span className="text-[10px] w-auto min-w-[2.4rem] shrink-0 font-mono text-right" style={{ color: theme.textDim }}>
               {peakDb <= -90 ? '-inf' : `${peakDb}dB`}
             </span>
           </div>
         </div>
 
         {/* Center / Right: Live Engine Telemetry */}
-        <div className="flex items-center gap-3 text-[10px] flex-wrap justify-end" style={{ color: theme.textDim }}>
-          <div>
-            <span>Peak Note: </span>
+        <div className="spectrum-telemetry flex items-center gap-x-3 gap-y-1 text-[10px] flex-wrap justify-between" style={{ color: theme.textDim }}>
+          <div className="truncate">
+            <span>Peak: </span>
             <span className="font-bold" style={{ color: theme.highlight }}>{peakNote}</span>
           </div>
-          <div className="hidden md:inline">
+          <div className="spectrum-telemetry-extra">
             <span>Filter: </span>
             <span style={{ color: theme.highlight }}>Monstercat 5-pt</span>
           </div>
-          <div className="hidden md:inline">
+          <div className="spectrum-telemetry-extra">
             <span>DAC: </span>
             <span style={{ color: theme.text }}>44.1kHz • 24-Bit</span>
           </div>
-          <div>
+          <div className="spectrum-telemetry-fft">
             <span>FFT: </span>
-            <span style={{ color: theme.text }}>2048 Bins</span>
+            <span style={{ color: theme.text }}>2048</span>
           </div>
-          <div className="font-bold" style={{ color: fps >= 55 ? theme.accent : theme.warning }}>
+          <div className="font-bold shrink-0" style={{ color: fps >= 55 ? theme.accent : theme.warning }}>
             [{fps} FPS]
           </div>
         </div>

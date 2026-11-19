@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { AsciiConfig, AsciiResult, Track, ThemeConfig } from '../types';
+import { AsciiConfig, AsciiResult, ShortcutBindings, Track, ThemeConfig } from '../types';
 import { Play, Pause, Heart, Plus, Eye, GripVertical } from 'lucide-react';
+import { DEFAULT_SHORTCUTS, formatShortcut, resolveGlobalShortcut } from '../services/shortcutsStorage';
 
 interface TrackListViewProps {
   theme: ThemeConfig;
@@ -24,6 +25,8 @@ interface TrackListViewProps {
   coverArtworkUrl?: string | null;
   isReorderable?: boolean;
   onReorderTrack?: (fromIndex: number, toIndex: number) => void;
+  shortcuts?: ShortcutBindings;
+  disableShortcuts?: boolean;
 }
 
 export const TrackListView: React.FC<TrackListViewProps> = ({
@@ -47,6 +50,8 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
   coverArtworkUrl,
   isReorderable = false,
   onReorderTrack,
+  shortcuts = DEFAULT_SHORTCUTS,
+  disableShortcuts = false,
 }) => {
   const listContainerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -238,14 +243,14 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
     }
   }, [selectedTrackIndex]);
 
-  // Keyboard access: Menu key / Shift+F10 opens the menu for the selected row.
+  // Keyboard access: Menu key / configured contextMenu shortcut opens the menu for the selected row.
   useEffect(() => {
-    if (!onContextMenu) return;
+    if (!onContextMenu || disableShortcuts) return;
     const handleKey = (e: KeyboardEvent) => {
-      const isMenuKey = e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey);
-      if (!isMenuKey) return;
+      if (e.defaultPrevented || e.isComposing) return;
+      if (resolveGlobalShortcut(e, shortcuts) !== 'contextMenu') return;
       const target = document.activeElement;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
       const track = tracks[selectedTrackIndex];
       const row = rowRefs.current[selectedTrackIndex];
       if (!track || !row) return;
@@ -255,15 +260,23 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [onContextMenu, tracks, selectedTrackIndex]);
+  }, [onContextMenu, disableShortcuts, shortcuts, tracks, selectedTrackIndex]);
+
+  const navHint = `${formatShortcut(shortcuts.moveDown[0])}/${formatShortcut(shortcuts.moveUp[0])}`;
+  const playHint = formatShortcut(shortcuts.selectTrack[0]);
+  const pauseHint = formatShortcut(shortcuts.playPause[0]);
+  const likeHint = formatShortcut(shortcuts.toggleLike[0]);
+  const searchHint = formatShortcut(shortcuts.focusSearch[0]);
+  const reorderBarHint = `Drag with click to reorder | ${playHint}: Play | ${pauseHint}: Pause | ${likeHint}: Like`;
+  const browseBarHint = `${navHint}: Scroll & Select | ${playHint}: Play | ${pauseHint}: Pause | ${likeHint}: Like`;
 
   return (
-    <div className="skin-panel flex-1 flex flex-col min-h-0 relative overflow-hidden select-none" style={{ backgroundColor: 'var(--app-surface-bg)' }}>
+    <div className="tracklist-root skin-panel flex-1 flex flex-col min-h-0 min-w-0 relative overflow-hidden select-none" style={{ backgroundColor: 'var(--app-surface-bg)' }}>
       {/* Background Cover Art Watermark (follows the render mode indicated on the cover screen) */}
       {showBackgroundAscii && (
         <div
           data-album-watermark="" aria-hidden="true"
-          className="absolute inset-0 pointer-events-none overflow-hidden opacity-30 flex items-center justify-end pr-8"
+          className="absolute inset-0 pointer-events-none overflow-hidden opacity-30 flex items-center justify-end pr-6"
           style={{ zIndex: 0 }}
         >
           {asciiConfig?.mode === 'original_hd' ? (
@@ -271,7 +284,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
               <img
                 src={coverArtworkUrl || currentTrack?.thumbnailUrl}
                 alt={currentTrack?.title || 'Cover'}
-                className="max-h-[250px] max-w-[270px] object-contain shadow-2xl"
+                className="tracklist-watermark-img object-contain shadow-2xl"
                 style={{
                   filter: `drop-shadow(0 0 16px rgba(0,0,0,0.95)) contrast(${(asciiConfig?.contrast ?? 0) + 100}%) brightness(${100 + (asciiConfig?.brightness ?? 0) * 10}%) ${asciiConfig?.inverted ? 'invert(1)' : ''} ${asciiConfig && !asciiConfig.colorEnabled ? 'grayscale(1)' : ''}`,
                 }}
@@ -307,57 +320,59 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
 
       {/* Header Bar */}
       <div
-        className="px-4 py-2 border-b flex items-center justify-between z-20 relative"
+        className="tracklist-header px-3 py-2 border-b flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 z-20 relative"
         style={{
           borderColor: theme.border,
           backgroundColor: 'var(--app-surface-card-bg)',
         }}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-2 truncate">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="truncate font-bold text-xs" title={title} style={{ color: theme.highlight }}>
             ┌─ {title} {subtitle ? `— ${subtitle}` : ''} ─
           </span>
-          <span className="text-xs opacity-60 hidden sm:inline">
+          <span className="tracklist-count-short shrink-0 text-[11px] opacity-60">
+            ({tracks.length})
+          </span>
+          <span className="tracklist-count-full shrink-0 text-xs opacity-60">
             ({tracks.length} track{tracks.length === 1 ? '' : 's'} {tracks.length > 0 ? `| #${selectedTrackIndex + 1}` : ''})
           </span>
         </div>
-        <div className="flex min-w-0 max-w-[55%] items-center gap-2 text-xs">
-          {dragIndex !== null && draggedTrack ? (
-            <span className="truncate font-bold animate-pulse text-[11px]" style={{ color: theme.accent }}>
-              [ ⠿ Moving: "{draggedTrack.title}" → Release at #{targetIndex !== null ? targetIndex + 1 : dragIndex + 1} | Esc: Cancel ]
+        {dragIndex !== null && draggedTrack ? (
+          <div className="tracklist-drag-status min-w-0 max-w-full">
+            <span className="block truncate font-bold animate-pulse text-[11px]" style={{ color: theme.accent }}>
+              [ ⠿ Moving: "{draggedTrack.title}" → #{targetIndex !== null ? targetIndex + 1 : dragIndex + 1} | Esc ]
             </span>
-          ) : isReorderable ? (
-            <span style={{ color: theme.textDim }} className="truncate text-[11px]" title="Drag with click to reorder | Enter: Play | Space: Pause | L: Like">
-              [Drag with click to reorder | Enter: Play | Space: Pause | L: Like]
+          </div>
+        ) : (
+          <div className="tracklist-hint min-w-0 max-w-full">
+            <span style={{ color: theme.textDim }} className="block truncate text-[11px]" title={isReorderable ? reorderBarHint : browseBarHint}>
+              [{isReorderable ? reorderBarHint : browseBarHint}]
             </span>
-          ) : (
-            <span style={{ color: theme.textDim }} className="truncate text-[11px]" title="j/k: Scroll & Select | Enter: Play | Space: Pause | L: Like">
-              [j/k: Scroll & Select | Enter: Play | Space: Pause | L: Like]
-            </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Table Column Headers */}
       <div
-        className="grid grid-cols-12 gap-2 px-4 py-1.5 border-b text-[11px] font-mono font-semibold uppercase tracking-wider z-20 relative"
+        className="tracklist-grid tracklist-table-head grid px-4 py-1.5 border-b text-[11px] font-mono font-semibold uppercase tracking-wider z-20 relative shrink-0"
         style={{
           borderColor: theme.border,
           color: theme.textDim,
           backgroundColor: 'var(--app-surface-bg)',
         }}
       >
-        <div className="col-span-1 text-center">#</div>
-        <div className="col-span-1 text-center">♥</div>
-        <div className="col-span-5 sm:col-span-5 md:col-span-5 truncate">Title</div>
-        <div className="col-span-3 sm:col-span-3 md:col-span-3 truncate">Artist</div>
-        <div className="col-span-2 text-right truncate">Length</div>
+        <div className="text-center">#</div>
+        <div className="text-center">♥</div>
+        <div className="min-w-0 truncate">Title</div>
+        <div className="tracklist-col-artist min-w-0 truncate">Artist</div>
+        <div className="tracklist-col-album min-w-0 truncate">Album</div>
+        <div className="text-right truncate">Length</div>
       </div>
 
       {/* Track Rows */}
       <div
         ref={listContainerRef}
-        className="flex-1 overflow-y-auto z-10 custom-scrollbar focus:outline-none"
+        className="flex-1 min-h-0 overflow-y-auto z-10 custom-scrollbar focus:outline-none"
         onScroll={() => {
           if (isDraggingRef.current && lastClientYRef.current !== null) {
             calcTargetIndex(lastClientYRef.current);
@@ -374,9 +389,9 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
         }}
       >
         {displayTracks.length === 0 ? (
-          <div className="h-48 flex flex-col items-center justify-center text-xs opacity-60">
+          <div className="min-h-[5rem] h-full flex flex-col items-center justify-center p-4 text-center text-xs opacity-60">
             <span>[ No tracks found in this category or playlist ]</span>
-            <span className="mt-1 text-[11px]">Use Search (/) or select another library category.</span>
+            <span className="mt-1 text-[11px]">Use Search ({searchHint}) or select another library category.</span>
           </div>
         ) : (
           displayTracks.map((track, index) => {
@@ -417,7 +432,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                   onSelectTrack(track, index);
                   onContextMenu({ track, index }, e.clientX, e.clientY);
                 }}
-                className={`track-row grid grid-cols-12 gap-2 px-4 py-1.5 items-center text-xs font-mono border-b transition-colors group relative ${
+                className={`track-row tracklist-grid grid px-4 py-1.5 items-center text-xs font-mono border-b transition-colors group relative ${
                   isReorderable ? (dragIndex !== null ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'
                 }`}
                 style={{
@@ -438,7 +453,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                 }}
               >
                 {/* Track Number / Play Indicator / Reorder Handle */}
-                <div className="col-span-1 text-center flex items-center justify-center relative z-20">
+                <div className="min-w-0 text-center flex items-center justify-center relative z-20">
                   {isDropTarget ? (
                     <span className="font-bold flex items-center gap-0.5 text-xs animate-pulse" style={{ color: theme.accent }}>
                       #{index + 1}
@@ -458,7 +473,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                           style={{ color: isSelected ? theme.highlight : theme.textDim }}
                         />
                       )}
-                      <span style={{ color: isSelected ? theme.highlight : theme.textDim }}>
+                      <span className="truncate" style={{ color: isSelected ? theme.highlight : theme.textDim }}>
                         {index + 1}
                       </span>
                     </div>
@@ -466,13 +481,14 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                 </div>
 
                 {/* Heart / Liked icon */}
-                <div className="col-span-1 text-center flex items-center justify-center relative z-20">
+                <div className="text-center flex items-center justify-center relative z-20">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleLike(track);
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
+                    aria-label={track.isLiked ? `Unlike ${track.title}` : `Like ${track.title}`}
                     className="hover:scale-125 transition-transform"
                     title={track.isLiked ? 'Unlike song' : 'Like song'}
                   >
@@ -485,42 +501,55 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                   </button>
                 </div>
 
-                {/* Track Title */}
-                <div className="col-span-5 sm:col-span-5 md:col-span-5 flex items-center gap-2 truncate relative z-20">
-                  {isCurrent && !isDropTarget && (
-                    <span style={{ color: theme.accent }} className="text-[10px] hidden sm:inline">
-                      ▶
-                    </span>
-                  )}
-                  {isDropTarget && (
+                {/* Track Title (with inline artist when container is narrow) */}
+                <div className="min-w-0 flex flex-col relative z-20">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    {isCurrent && !isDropTarget && (
+                      <span style={{ color: theme.accent }} className="tracklist-inline-play text-[10px] shrink-0">
+                        ▶
+                      </span>
+                    )}
+                    {isDropTarget && (
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 border uppercase tracking-wider font-bold animate-pulse flex-shrink-0"
+                        style={{
+                          borderColor: theme.accent,
+                          backgroundColor: 'var(--app-surface-bg)',
+                          color: theme.accent,
+                        }}
+                      >
+                        [ ◄ DROP HERE ◄ ]
+                      </span>
+                    )}
                     <span
-                      className="text-[9px] px-1.5 py-0.5 border uppercase tracking-wider font-bold animate-pulse flex-shrink-0"
+                      className={`min-w-0 truncate ${isCurrent || isDropTarget ? 'font-bold' : ''}`}
                       style={{
-                        borderColor: theme.accent,
-                        backgroundColor: 'var(--app-surface-bg)',
-                        color: theme.accent,
+                        color: isDropTarget ? theme.highlight : isCurrent ? theme.highlight : theme.text,
                       }}
                     >
-                      [ ◄ DROP HERE ◄ ]
+                      {track.title}
                     </span>
-                  )}
+                  </div>
                   <span
-                    className={`truncate ${isCurrent || isDropTarget ? 'font-bold' : ''}`}
-                    style={{
-                      color: isDropTarget ? theme.highlight : isCurrent ? theme.highlight : theme.text,
-                    }}
+                    className="tracklist-inline-artist truncate text-[10px]"
+                    style={{ color: isDropTarget ? theme.highlight : isCurrent ? theme.text : theme.textDim }}
                   >
-                    {track.title}
+                    {track.artist}
                   </span>
                 </div>
 
                 {/* Artist Name */}
-                <div className="col-span-3 sm:col-span-3 md:col-span-3 truncate text-[11px] relative z-20" style={{ color: isDropTarget ? theme.highlight : isCurrent ? theme.text : theme.textDim }}>
+                <div className="tracklist-col-artist min-w-0 truncate text-[11px] relative z-20" style={{ color: isDropTarget ? theme.highlight : isCurrent ? theme.text : theme.textDim }}>
                   {track.artist}
                 </div>
 
+                {/* Album Name (shown on wide containers) */}
+                <div className="tracklist-col-album min-w-0 truncate text-[11px] opacity-80 relative z-20" style={{ color: isDropTarget ? theme.highlight : isCurrent ? theme.text : theme.textDim }}>
+                  {track.album || '—'}
+                </div>
+
                 {/* Duration & Quick Hover Actions */}
-                <div className="col-span-2 min-w-0 text-right flex items-center justify-end relative z-20">
+                <div className="min-w-0 text-right flex items-center justify-end relative z-20">
                   <span className="text-[11px] group-hover:opacity-0 group-focus-within:opacity-0" style={{ color: isDropTarget ? theme.accent : isCurrent ? theme.highlight : theme.textDim }}>
                     {track.duration && track.duration !== 210
                       ? formatSeconds(track.duration)
@@ -540,6 +569,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                         onViewAscii(track);
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
+                      aria-label={`View cover for ${track.title} in ASCII`}
                       className="p-1 hover:brightness-125 text-[10px] border"
                       style={{ borderColor: theme.border, color: theme.accent }}
                       title="View Album Cover in ASCII"
@@ -552,6 +582,7 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
                         onAddToQueue(track);
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
+                      aria-label={`Add ${track.title} to queue`}
                       className="p-1 hover:brightness-125 text-[10px] border"
                       style={{ borderColor: theme.border, color: theme.highlight }}
                       title="Add to queue"
@@ -569,10 +600,10 @@ export const TrackListView: React.FC<TrackListViewProps> = ({
       {/* Floating Dragged Track Preview (Follows cursor) */}
       {dragIndex !== null && cursorPos && draggedTrack && (
         <div
-          className="fixed z-50 pointer-events-none flex items-center gap-2.5 px-3 py-1.5 text-xs font-mono border shadow-2xl select-none"
+          className="fixed z-50 pointer-events-none flex items-center gap-2.5 px-3 py-1.5 text-xs font-mono border shadow-2xl select-none max-w-[calc(100vw-16px)]"
           style={{
-            left: `${cursorPos.x + 14}px`,
-            top: `${cursorPos.y + 14}px`,
+            left: `${Math.max(8, Math.min(cursorPos.x + 14, window.innerWidth - 280))}px`,
+            top: `${Math.max(8, Math.min(cursorPos.y + 14, window.innerHeight - 44))}px`,
             backgroundColor: 'var(--app-surface-card-bg)',
             borderColor: theme.accent,
             color: theme.highlight,

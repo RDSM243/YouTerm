@@ -39,13 +39,13 @@ const SectionHeader = ({ theme, label, expanded, controls, focused, onToggle }: 
 }) => (
   <button type="button" aria-label={label} aria-expanded={expanded} aria-controls={controls}
     title={`${expanded ? 'Collapse' : 'Expand'} ${label}`} onClick={onToggle}
-    className="flex w-full shrink-0 items-center gap-1.5 border-b px-3 py-1 text-[11px] font-bold uppercase tracking-wider hover:brightness-125"
+    className="sidebar-header flex w-full shrink-0 items-center gap-1.5 border-b px-3 py-1 text-[11px] font-bold uppercase tracking-wider hover:brightness-125"
     style={{ borderColor: theme.border, color: theme.accent, backgroundColor: 'var(--app-surface-card-bg)' }}>
     {expanded ? <ChevronDown aria-hidden="true" className="h-3 w-3 shrink-0" /> : <ChevronRight aria-hidden="true" className="h-3 w-3 shrink-0" />}
-    <span>{label}</span>
-    <span aria-hidden="true" className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left">────────────────────────────────</span>
-    {focused && <span aria-hidden="true" className="shrink-0 text-[10px]" style={{ color: theme.highlight }}>[Focused]</span>}
-    <span aria-hidden="true">┐</span>
+    <span className="truncate">{label}</span>
+    <span aria-hidden="true" className="sidebar-rule min-w-0 flex-1 overflow-hidden whitespace-nowrap text-left">────────────────────────────────</span>
+    {focused && <span aria-hidden="true" className="sidebar-focused-tag shrink-0 text-[10px]" style={{ color: theme.highlight }}>[Focused]</span>}
+    <span aria-hidden="true" className="sidebar-corner shrink-0">┐</span>
   </button>
 );
 
@@ -73,26 +73,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const showLibrary = preferences.showLibrary && libraryItems.length > 0;
   if (!showLibrary && !preferences.showPlaylists) return null;
 
+  const isDual = showLibrary && preferences.showPlaylists;
+
   return (
     <aside
       aria-label="Library and playlists"
       data-background-region="sidebar" data-background-enabled={showBackground}
-      className="skin-panel w-full min-h-0 min-w-0 flex-1 flex flex-col select-none overflow-hidden text-xs"
+      className="sidebar-root skin-panel w-full min-h-0 min-w-0 flex-1 flex flex-col select-none overflow-hidden text-xs"
       style={{
         borderColor: theme.border,
         backgroundColor: showBackground ? 'transparent' : theme.bg,
         ...(!showBackground ? { '--app-surface-bg': theme.bg, '--app-surface-card-bg': theme.cardBg } : {}),
       } as React.CSSProperties}
     >
+      <div className="sidebar-sections flex min-h-0 min-w-0 flex-1 flex-col" data-dual={isDual}>
       {/* Box: Library */}
       {showLibrary && <section
-        className={`flex min-h-0 flex-col border-b ${preferences.libraryExpanded ? preferences.showPlaylists && preferences.playlistsExpanded ? 'max-h-[60%]' : 'flex-1' : 'shrink-0'}`}
+        data-expanded={preferences.libraryExpanded}
+        className={`sidebar-library-section flex min-h-0 min-w-0 flex-col border-b ${preferences.libraryExpanded ? preferences.showPlaylists && preferences.playlistsExpanded ? 'max-h-[60%]' : 'flex-1' : 'shrink-0'}`}
         style={{ borderColor: theme.border }}>
         <SectionHeader theme={theme} label="Library" expanded={preferences.libraryExpanded}
           controls="sidebar-library-items" focused={isFocused}
           onToggle={() => onChangePreferences({ libraryExpanded: !preferences.libraryExpanded })} />
         <div id="sidebar-library-items" hidden={!preferences.libraryExpanded}
-          className={preferences.libraryExpanded ? 'min-h-0 overflow-y-auto py-1 custom-scrollbar' : 'hidden'}>
+          className={preferences.libraryExpanded ? 'sidebar-section-list min-h-0 overflow-y-auto py-1 custom-scrollbar' : 'hidden'}>
           {libraryItems.map((item) => {
             const isSelected = activeCategory === item.id && !selectedPlaylistId;
             const isPlayingThis = playingCategory === item.id && !playingPlaylistId;
@@ -104,14 +108,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 aria-label={item.label}
                 aria-current={isSelected ? 'page' : undefined}
                 onClick={() => onSelectCategory(item.id)}
-                className="w-full text-left px-3 py-1.5 flex items-center justify-between transition-colors group cursor-pointer"
+                className="sidebar-item w-full min-w-0 text-left px-3 py-1.5 flex items-center justify-between gap-2 transition-colors group cursor-pointer"
                 style={{
                   backgroundColor: isSelected ? 'var(--app-surface-card-bg)' : 'transparent',
                   color: isSelected ? theme.highlight : isPlayingThis ? theme.accent : theme.text,
                   fontWeight: isSelected || isPlayingThis ? 600 : 400,
                 }}
               >
-                <div className="flex items-center gap-2 truncate">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
                   <span
                     className={`w-3 text-center flex-shrink-0 ${isPlayingThis && isPlaying ? 'animate-pulse' : ''}`}
                     style={{ color: isPlayingThis ? theme.accent : isSelected ? theme.accent : 'transparent' }}
@@ -123,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
                 {count !== undefined && (
                   <span
-                    className="text-[10px] px-1.5 py-0.2 border rounded-none"
+                    className="text-[10px] shrink-0 px-1.5 py-0.2 border rounded-none"
                     style={{
                       borderColor: isPlayingThis ? theme.accent : theme.border,
                       color: isPlayingThis ? theme.accent : item.id === 'liked_songs' ? theme.accent : theme.textDim,
@@ -139,7 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </section>}
 
       {/* Box: Playlists */}
-      {preferences.showPlaylists && <section className={`flex min-h-0 flex-col ${preferences.playlistsExpanded ? 'flex-1' : 'shrink-0'}`}>
+      {preferences.showPlaylists && <section className={`sidebar-playlists-section flex min-h-0 min-w-0 flex-col ${preferences.playlistsExpanded ? 'flex-1' : 'shrink-0'}`}>
         <SectionHeader theme={theme} label="Playlists" expanded={preferences.playlistsExpanded}
           controls="sidebar-playlist-items" focused={isFocused && !showLibrary}
           onToggle={() => onChangePreferences({ playlistsExpanded: !preferences.playlistsExpanded })} />
@@ -150,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div
           role="group"
           aria-label="Playlist actions"
-          className="px-3 py-1.5 flex shrink-0 items-center justify-start gap-3 border-b"
+          className="sidebar-actions px-3 py-1.5 flex shrink-0 flex-wrap items-center justify-start gap-x-3 gap-y-1 border-b"
           style={{ borderColor: theme.border, backgroundColor: 'var(--app-surface-card-bg)' }}
         >
           <button
@@ -175,7 +179,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto py-1 custom-scrollbar">
+        <div className="sidebar-section-list flex-1 min-h-0 overflow-y-auto py-1 custom-scrollbar">
           {playlists.map((pl) => {
             const isSelected = selectedPlaylistId === pl.id;
             const isPlayingThis = playingPlaylistId === pl.id;
@@ -190,14 +194,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   e.preventDefault();
                   onPlaylistContextMenu(pl, e.clientX, e.clientY);
                 }}
-                className="w-full text-left px-3 py-1 flex items-center justify-between transition-colors group cursor-pointer"
+                className="sidebar-item w-full min-w-0 text-left px-3 py-1 flex items-center justify-between gap-2 transition-colors group cursor-pointer"
                 style={{
                   backgroundColor: isSelected ? 'var(--app-surface-card-bg)' : 'transparent',
                   color: isPlayingThis ? theme.accent : isSelected ? theme.highlight : theme.textDim,
                   fontWeight: isSelected || isPlayingThis ? 600 : 400,
                 }}
               >
-                <div className="flex items-center gap-2 truncate">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
                   <span
                     className={`w-3 text-center flex-shrink-0 ${isPlayingThis && isPlaying ? 'animate-pulse' : ''}`}
                     style={{ color: isPlayingThis ? theme.accent : isSelected ? theme.accent : 'transparent' }}
@@ -230,6 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
         </div>
       </section>}
+      </div>
     </aside>
   );
 };

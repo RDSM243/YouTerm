@@ -9,6 +9,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test:skins": "node scripts/check-skins.mjs",
+    "test:shortcuts": "node scripts/check-shortcuts.mjs",
     "preview": "vite preview",
     "tauri:dev": "cargo run --manifest-path src-tauri/Cargo.toml",
     "debug:build": "node scripts/debug.mjs --build-only",

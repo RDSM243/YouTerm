@@ -10,9 +10,10 @@ import {
   AsciiResult,
   LibraryCategory,
   PlayerState,
-  PlayerSkin,
   Playlist,
+  ShortcutBindings,
   SidebarPreferences,
+  SkinConfig,
   ThemeConfig,
   ThemeId,
   Track,
@@ -20,8 +21,8 @@ import {
   UserSession,
 } from './types';
 import { DEFAULT_THEME_ID, THEMES } from './data/themes';
-import { getFontFamily, loadAppearance, loadCustomThemes, normalizeAppearance, resolveTheme, saveAppearance, saveCustomThemes, validateCustomTheme } from './services/themeStorage';
-import { skinVariables } from './services/skin';
+import { getFontFamily, loadAppearance, loadCustomThemes, normalizeAppearance, resolveTheme, saveAppearance, saveCustomThemes } from './services/themeStorage';
+import { normalizeSkin, skinVariables } from './services/skin';
 import { createDockLayout, dockPanels } from './services/dockLayout';
 import {
   defaultSession,
@@ -64,6 +65,14 @@ import {
 import { copyText } from './services/clipboard';
 import { openExternal } from './services/desktop';
 import { getVisibleLibraryCategories, loadSidebarPreferences, normalizeSidebarPreferences, resolveSidebarSelection, saveSidebarPreferences } from './services/sidebarStorage';
+import {
+  formatActionShortcuts,
+  formatShortcut,
+  loadShortcuts,
+  normalizeShortcutBindings,
+  resolveGlobalShortcut,
+  saveShortcuts,
+} from './services/shortcutsStorage';
 
 import { TopSearchBar } from './components/TopSearchBar';
 import { BackgroundLayer } from './components/BackgroundLayer';
@@ -85,7 +94,7 @@ import {
   Terminal, Eye, Disc, Activity, Sparkles, Layers, ListMusic, Compass, Link2,
   Play, Pause, SkipBack, SkipForward, ListStart, ListEnd, ListPlus, Heart, Trash2,
   Copy, CopyPlus, Link as LinkIcon, ExternalLink, Search, Shuffle, Repeat, Volume2, Pencil, FolderPlus,
-  Settings, HelpCircle, FolderOpen,
+  Settings, Keyboard, FolderOpen,
 } from 'lucide-react';
 
 export default function App() {
@@ -172,6 +181,13 @@ export default function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [shortcuts, setShortcuts] = useState<ShortcutBindings>(loadShortcuts);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const handleChangeShortcuts = useCallback((next: ShortcutBindings) => {
+    const normalized = normalizeShortcutBindings(next);
+    saveShortcuts(normalized);
+    setShortcuts(normalized);
+  }, []);
 
   // ASCII Engine State
   const [asciiConfig, setAsciiConfig] = useState<AsciiConfig>(loadAsciiConfig);
@@ -1009,20 +1025,10 @@ export default function App() {
     saveAsciiConfig(next);
   }, [asciiConfig]);
 
-  const handleApplySkin = useCallback((value: PlayerSkin) => {
-    const nextAppearance = normalizeAppearance(value.appearance);
-    const isNewTheme = value.theme.id.startsWith('custom_') && !customThemes.some(item => item.id === value.theme.id);
-    const nextTheme = isNewTheme ? validateCustomTheme({ ...value.theme,
-      look: { appearance: nextAppearance, viewMode: value.viewMode, artworkMode: value.artworkMode } }) : value.theme;
-    const nextThemes = isNewTheme ? [...customThemes, nextTheme] : customThemes;
-    if (isNewTheme) saveCustomThemes(nextThemes);
-    handleChangeAppearance(nextAppearance);
-    setCustomThemes(nextThemes);
-    setThemeId(nextTheme.id);
-    saveThemeId(nextTheme.id);
-    handleSetViewMode(value.viewMode);
-    handleChangeAsciiConfig({ mode: value.artworkMode });
-  }, [customThemes, handleChangeAppearance, handleSetViewMode, handleChangeAsciiConfig]);
+  const handleChangeSkin = useCallback((change: Partial<SkinConfig>) => {
+    const previous = appearanceRef.current;
+    handleChangeAppearance({ ...previous, skin: normalizeSkin({ ...previous.skin, ...change }) });
+  }, [handleChangeAppearance]);
 
   const handleChangePreferences = (change: Partial<PlaybackSettings>) => {
     if (change.volume !== undefined) handleVolumeChange(change.volume);
@@ -1065,13 +1071,16 @@ export default function App() {
   // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (settingsTab !== null || isLayoutEditing) return;
+      if (settingsTab !== null || isLayoutEditing || contextMenu) return;
+      if (e.defaultPrevented || e.isComposing) return;
+      const active = document.activeElement;
       const isInput =
-        document.activeElement instanceof HTMLInputElement ||
-        document.activeElement instanceof HTMLTextAreaElement ||
-        document.activeElement instanceof HTMLSelectElement;
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement ||
+        (active instanceof HTMLElement && active.isContentEditable);
       if (isInput) return;
-      if ((e.key === 'Enter' || e.key === ' ') && document.activeElement instanceof HTMLButtonElement) return;
+      if ((e.key === 'Enter' || e.key === ' ') && active instanceof HTMLButtonElement) return;
 
       if (showAuthModal || showImportModal || showCreatePlaylistModal || renamingPlaylist) {
         if (e.key === 'Escape') {
@@ -1083,121 +1092,125 @@ export default function App() {
         return;
       }
 
-      switch (e.key) {
-        case ' ':
+      const action = resolveGlobalShortcut(e, shortcuts);
+      switch (action) {
+        case 'playPause':
           e.preventDefault();
           handleTogglePlay();
           break;
-        case 'j':
-        case 'ArrowDown':
+        case 'moveDown':
           e.preventDefault();
           setSelectedTrackIndex((prev) => Math.min(displayedTracks.length - 1, prev + 1));
           break;
-        case 'k':
-        case 'ArrowUp':
+        case 'moveUp':
           e.preventDefault();
           setSelectedTrackIndex((prev) => Math.max(0, prev - 1));
           break;
-        case 'PageDown':
+        case 'pageDown':
           e.preventDefault();
           setSelectedTrackIndex((prev) => Math.min(displayedTracks.length - 1, prev + 8));
           break;
-        case 'PageUp':
+        case 'pageUp':
           e.preventDefault();
           setSelectedTrackIndex((prev) => Math.max(0, prev - 8));
           break;
-        case 'Home':
+        case 'home':
           e.preventDefault();
           setSelectedTrackIndex(0);
           break;
-        case 'End':
+        case 'end':
           e.preventDefault();
           setSelectedTrackIndex(Math.max(0, displayedTracks.length - 1));
           break;
-        case 'Enter':
+        case 'selectTrack':
           e.preventDefault();
           if (displayedTracks[selectedTrackIndex]) {
             handlePlayTrack(displayedTracks[selectedTrackIndex]);
           }
           break;
-        case 'n':
+        case 'nextTrack':
           e.preventDefault();
           handleNextTrack();
           break;
-        case 'p':
+        case 'prevTrack':
           e.preventDefault();
           handlePrevTrack();
           break;
-        case 'l':
+        case 'toggleLike':
           e.preventDefault();
           handleToggleLike(displayedTracks[selectedTrackIndex] || playerState.currentTrack || undefined);
           break;
-        case 's':
+        case 'focusSearch':
+          e.preventDefault();
+          searchInputRef.current?.focus();
+          break;
+        case 'toggleShuffle':
           e.preventDefault();
           handleToggleShuffle();
           break;
-        case 'r':
+        case 'cycleRepeat':
           e.preventDefault();
           handleCycleRepeat();
           break;
-        case 'm':
+        case 'toggleMute':
           e.preventDefault();
           handleToggleMute();
           break;
-        case '+':
-        case '=':
+        case 'volumeUp':
           e.preventDefault();
           handleVolumeChange(playerState.volume + 5);
           break;
-        case '-':
+        case 'volumeDown':
           e.preventDefault();
           handleVolumeChange(playerState.volume - 5);
           break;
-        case 'h':
-        case '[':
+        case 'seekBackward':
           e.preventDefault();
           audioEngine.seekTo(Math.max(0, playerState.currentTime - 5));
           break;
-        case ']':
+        case 'seekForward':
           e.preventDefault();
           audioEngine.seekTo(Math.min(playerState.duration, playerState.currentTime + 5));
           break;
-        case 'Tab':
+        case 'switchFocus':
           if (hasSidebar) {
             e.preventDefault();
             setIsSidebarFocused((prev) => !prev);
           }
           break;
-        case '1':
+        case 'viewTracklist':
           e.preventDefault();
           handleSetViewMode('tracklist');
           break;
-        case '2':
+        case 'viewCover':
           e.preventDefault();
           handleSetViewMode('ascii_cover');
           break;
-        case '3':
+        case 'viewSplit':
           e.preventDefault();
           handleSetViewMode('split');
           break;
-        case '4':
+        case 'viewVisualizer':
           e.preventDefault();
           handleSetViewMode('visualizer');
           break;
-        case 'i':
+        case 'importPlaylist':
           e.preventDefault();
           setShowImportModal(true);
           break;
-        case 't':
+        case 'cycleTheme': {
           e.preventDefault();
           const currentIdx = availableThemes.findIndex(theme => theme.id === themeId);
           const nextTheme = availableThemes[(currentIdx + 1) % availableThemes.length];
-          if (nextTheme.look) handleApplySkin({ theme: nextTheme, ...nextTheme.look });
-          else { setThemeId(nextTheme.id); saveThemeId(nextTheme.id); }
+          setThemeId(nextTheme.id);
+          saveThemeId(nextTheme.id);
           break;
-        case '?':
+        }
+        case 'openShortcuts':
           e.preventDefault();
-          setSettingsTab('help');
+          setSettingsTab('shortcuts');
+          break;
+        case 'contextMenu':
           break;
       }
     };
@@ -1213,16 +1226,22 @@ export default function App() {
     handleNextTrack,
     handlePrevTrack,
     handleToggleLike,
+    handleToggleShuffle,
+    handleCycleRepeat,
+    handleToggleMute,
+    handleVolumeChange,
+    handleSetViewMode,
     showAuthModal,
     showImportModal,
     settingsTab,
     isLayoutEditing,
+    contextMenu,
     showCreatePlaylistModal,
     renamingPlaylist,
     themeId,
     availableThemes,
     hasSidebar,
-    handleApplySkin,
+    shortcuts,
   ]);
 
   // YouTube Search Handler
@@ -1524,15 +1543,15 @@ export default function App() {
       id: 'toggle-play',
       label: playerState.isPlaying ? 'Pause' : 'Play',
       icon: playerState.isPlaying ? Pause : Play,
-      hint: 'Space',
+      hint: formatActionShortcuts(shortcuts.playPause),
       onSelect: handleTogglePlay,
     },
-    { id: 'next', label: 'Next track', icon: SkipForward, hint: 'n', onSelect: handleNextTrack },
-    { id: 'prev', label: 'Previous track', icon: SkipBack, hint: 'p', onSelect: handlePrevTrack },
+    { id: 'next', label: 'Next track', icon: SkipForward, hint: formatActionShortcuts(shortcuts.nextTrack), onSelect: handleNextTrack },
+    { id: 'prev', label: 'Previous track', icon: SkipBack, hint: formatActionShortcuts(shortcuts.prevTrack), onSelect: handlePrevTrack },
     { id: 'sep-1', separator: true },
-    { id: 'shuffle', label: 'Shuffle', icon: Shuffle, hint: 's', checked: playerState.shuffle, onSelect: handleToggleShuffle },
-    { id: 'repeat', label: `Repeat: ${playerState.repeat}`, icon: Repeat, hint: 'r', onSelect: handleCycleRepeat },
-    { id: 'mute', label: 'Mute', icon: Volume2, hint: 'm', checked: playerState.isMuted, onSelect: handleToggleMute },
+    { id: 'shuffle', label: 'Shuffle', icon: Shuffle, hint: formatActionShortcuts(shortcuts.toggleShuffle), checked: playerState.shuffle, onSelect: handleToggleShuffle },
+    { id: 'repeat', label: `Repeat: ${playerState.repeat}`, icon: Repeat, hint: formatActionShortcuts(shortcuts.cycleRepeat), onSelect: handleCycleRepeat },
+    { id: 'mute', label: 'Mute', icon: Volume2, hint: formatActionShortcuts(shortcuts.toggleMute), checked: playerState.isMuted, onSelect: handleToggleMute },
     { id: 'sep-2', separator: true },
     {
       id: 'view',
@@ -1540,10 +1559,10 @@ export default function App() {
       icon: Layers,
       children: (
         [
-          ['tracklist', 'Tracks', '1'],
-          ['ascii_cover', 'Cover', '2'],
-          ['split', 'Split view', '3'],
-          ['visualizer', 'Spectrum', '4'],
+          ['tracklist', 'Tracks', formatActionShortcuts(shortcuts.viewTracklist)],
+          ['ascii_cover', 'Cover', formatActionShortcuts(shortcuts.viewCover)],
+          ['split', 'Split view', formatActionShortcuts(shortcuts.viewSplit)],
+          ['visualizer', 'Spectrum', formatActionShortcuts(shortcuts.viewVisualizer)],
           ['custom', 'Custom layout', ''],
         ] as [TuiViewMode, string, string][]
       ).map(([mode, label, hint]) => ({
@@ -1556,9 +1575,9 @@ export default function App() {
     },
     { id: 'new-playlist', label: 'New playlist…', icon: FolderPlus, onSelect: handleCreatePlaylist },
     { id: 'edit-layout', label: 'Edit layout…', icon: Layers, onSelect: handleStartLayoutEditing },
-    { id: 'import', label: 'Import playlist…', icon: Link2, hint: 'i', onSelect: () => setShowImportModal(true) },
+    { id: 'import', label: 'Import playlist…', icon: Link2, hint: formatActionShortcuts(shortcuts.importPlaylist), onSelect: () => setShowImportModal(true) },
     { id: 'settings', label: 'Settings…', icon: Settings, onSelect: () => setSettingsTab('general') },
-    { id: 'help', label: 'Keyboard shortcuts', icon: HelpCircle, hint: '?', onSelect: () => setSettingsTab('help') },
+    { id: 'shortcuts', label: 'Keyboard shortcuts', icon: Keyboard, hint: formatActionShortcuts(shortcuts.openShortcuts), onSelect: () => setSettingsTab('shortcuts') },
   ];
 
   const openMenu = (x: number, y: number, items: ContextMenuItem[], title?: string) =>
@@ -1656,6 +1675,8 @@ export default function App() {
           moveInPlaylist(selectedPlaylist, from, to);
         }
       }}
+      shortcuts={shortcuts}
+      disableShortcuts={anyModalOpen || isLayoutEditing || !!contextMenu}
     />
   );
 
@@ -1750,7 +1771,7 @@ export default function App() {
       data-glow={appearance.glow}
       data-player-position={appearance.skin.playerPosition}
       data-control-style={appearance.skin.controlStyle}
-      className="youterm relative isolate h-screen max-h-screen w-screen flex flex-col font-mono select-none overflow-hidden"
+      className="youterm relative isolate h-dvh max-h-dvh w-full flex flex-col font-mono select-none overflow-hidden"
       style={{
         backgroundColor: theme.bg,
         color: theme.text,
@@ -1770,7 +1791,7 @@ export default function App() {
         {/* Authentic Unix / Linux Mint Terminal Header Bar */}
           {appearance.skin.showHeader && <div
             inert={isLayoutEditing}
-            className="app-header skin-panel flex shrink-0 items-center justify-between gap-3 px-3 py-1.5 border-b text-xs select-none"
+            className="app-header skin-panel flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-1.5 border-b text-xs select-none"
             style={{
               borderColor: theme.border,
               backgroundColor: 'var(--app-surface-card-bg)',
@@ -1779,68 +1800,88 @@ export default function App() {
             {/* Window title */}
             <div className="flex shrink-0 items-center gap-2">
               <span className="font-bold text-xs flex items-center gap-1.5" style={{ color: theme.highlight }}>
-                <Terminal className="w-3.5 h-3.5" style={{ color: theme.accent }} />
-                <span>YouTerm v{appVersion}</span>
+                <Terminal className="w-3.5 h-3.5 shrink-0" style={{ color: theme.accent }} />
+                <span>YouTerm<span className="app-version"> v{appVersion}</span></span>
               </span>
             </div>
 
             {/* View Mode Navigation Tabs */}
-            <div className="flex items-center gap-1 text-[11px] overflow-x-auto">
+            <div className="app-header-tabs flex min-w-0 flex-wrap items-center gap-1 text-[11px]">
               <button
                 onClick={() => handleSetViewMode('tracklist')}
-                className="px-2 py-0.5 border flex items-center gap-1 transition-all"
+                aria-label="Tracks view"
+                className="header-tab px-2 py-0.5 border flex items-center gap-1 whitespace-nowrap transition-all"
                 style={{
                   borderColor: viewMode === 'tracklist' ? theme.accent : theme.border,
                   backgroundColor: viewMode === 'tracklist' ? 'var(--app-surface-bg)' : 'transparent',
                   color: viewMode === 'tracklist' ? theme.highlight : theme.textDim,
                 }}
               >
-                <ListMusic className="w-3 h-3" />
-                <span>[1: Tracks]</span>
+                <ListMusic className="w-3 h-3 shrink-0" />
+                <span>
+                  <span className="header-shortcut-affix" aria-hidden="true">[{formatShortcut(shortcuts.viewTracklist[0])}: </span>
+                  Tracks
+                  <span className="header-shortcut-affix" aria-hidden="true">]</span>
+                </span>
               </button>
 
               <button
                 onClick={() => handleSetViewMode('ascii_cover')}
-                className="px-2 py-0.5 border flex items-center gap-1 transition-all"
+                aria-label="Cover view"
+                className="header-tab px-2 py-0.5 border flex items-center gap-1 whitespace-nowrap transition-all"
                 style={{
                   borderColor: viewMode === 'ascii_cover' ? theme.accent : theme.border,
                   backgroundColor: viewMode === 'ascii_cover' ? 'var(--app-surface-bg)' : 'transparent',
                   color: viewMode === 'ascii_cover' ? theme.highlight : theme.textDim,
                 }}
               >
-                <Eye className="w-3 h-3" />
-                <span>[2: Cover]</span>
+                <Eye className="w-3 h-3 shrink-0" />
+                <span>
+                  <span className="header-shortcut-affix" aria-hidden="true">[{formatShortcut(shortcuts.viewCover[0])}: </span>
+                  Cover
+                  <span className="header-shortcut-affix" aria-hidden="true">]</span>
+                </span>
               </button>
 
               <button
                 onClick={() => handleSetViewMode('split')}
-                className="px-2 py-0.5 border flex items-center gap-1 transition-all"
+                aria-label="Split View"
+                className="header-tab px-2 py-0.5 border flex items-center gap-1 whitespace-nowrap transition-all"
                 style={{
                   borderColor: viewMode === 'split' ? theme.accent : theme.border,
                   backgroundColor: viewMode === 'split' ? 'var(--app-surface-bg)' : 'transparent',
                   color: viewMode === 'split' ? theme.highlight : theme.textDim,
                 }}
               >
-                <Layers className="w-3 h-3" />
-                <span>[3: Split View]</span>
+                <Layers className="w-3 h-3 shrink-0" />
+                <span>
+                  <span className="header-shortcut-affix" aria-hidden="true">[{formatShortcut(shortcuts.viewSplit[0])}: </span>
+                  Split View
+                  <span className="header-shortcut-affix" aria-hidden="true">]</span>
+                </span>
               </button>
 
               <button
                 onClick={() => handleSetViewMode('visualizer')}
-                className="px-2 py-0.5 border flex items-center gap-1 transition-all"
+                aria-label="Spectrum view"
+                className="header-tab px-2 py-0.5 border flex items-center gap-1 whitespace-nowrap transition-all"
                 style={{
                   borderColor: viewMode === 'visualizer' ? theme.accent : theme.border,
                   backgroundColor: viewMode === 'visualizer' ? 'var(--app-surface-bg)' : 'transparent',
                   color: viewMode === 'visualizer' ? theme.highlight : theme.textDim,
                 }}
               >
-                <Activity className="w-3 h-3" />
-                <span>[4: Spectrum]</span>
+                <Activity className="w-3 h-3 shrink-0" />
+                <span>
+                  <span className="header-shortcut-affix" aria-hidden="true">[{formatShortcut(shortcuts.viewVisualizer[0])}: </span>
+                  Spectrum
+                  <span className="header-shortcut-affix" aria-hidden="true">]</span>
+                </span>
               </button>
               {appearance.skin.layout && <button type="button" onClick={() => handleSetViewMode('custom')}
-                className="flex items-center gap-1 border px-2 py-0.5" aria-pressed={viewMode === 'custom'}
+                className="header-tab flex items-center gap-1 whitespace-nowrap border px-2 py-0.5" aria-pressed={viewMode === 'custom'}
                 style={{ borderColor: viewMode === 'custom' ? theme.accent : theme.border, color: viewMode === 'custom' ? theme.highlight : theme.textDim }}>
-                <Layers className="h-3 w-3" /> Custom layout
+                <Layers className="h-3 w-3 shrink-0" /> Custom<span className="header-custom-suffix"> layout</span>
               </button>}
             </div>
           </div>}
@@ -1865,6 +1906,8 @@ export default function App() {
             onOpenAuth={() => setShowAuthModal(true)}
             onOpenSettings={() => setSettingsTab('general')}
             isModalOpen={anyModalOpen}
+            searchInputRef={searchInputRef}
+            focusSearchHint={formatShortcut(shortcuts.focusSearch[0])}
           />
 
           {/* The custom workspace keeps every panel independently movable. */}
@@ -1874,14 +1917,14 @@ export default function App() {
             onSave={handleSaveLayout} onCancel={handleCancelLayout} /> :
           <ResizableSplit theme={theme} storageKey="sidebar" label="Resize sidebar"
             reverse={appearance.skin.sidebar === 'right'} spacing={appearance.skin.panelGap}
-            unit="pixels" defaultSize={256} minFirst={176} minSecond={420} maxFirst={480}
+            unit="pixels" defaultSize={256} minFirst={176} minSecond={320} maxFirst={480}
             showFirst={hasSidebar} first={sidebarPanel}
             second={<>
               {viewMode === 'tracklist' && trackListPanel}
               {viewMode === 'ascii_cover' && artworkPanel}
               {viewMode === 'split' && <ResizableSplit theme={theme} storageKey="artwork" label="Resize album artwork panel" regionLabel="Split view"
                 spacing={appearance.skin.panelGap} rowAt="lg" defaultSize={{ row: 40, column: 100 / 3 }}
-                minFirst={{ row: 260, column: 120 }} minSecond={{ row: 300, column: 260 }}
+                minFirst={{ row: 240, column: 120 }} minSecond={{ row: 280, column: 220 }}
                 first={trackListPanel} second={splitArtworkPanel} />}
               {viewMode === 'visualizer' && spectrumPanel}
             </>} />}
@@ -1896,8 +1939,8 @@ export default function App() {
                 color: '#eab308',
               }}
             >
-              <Terminal className="w-3.5 h-3.5" />
-              <span>{playbackWarning}</span>
+              <Terminal className="w-3.5 h-3.5 shrink-0" />
+              <span className="min-w-0 truncate">{playbackWarning}</span>
             </div>
           )}
 
@@ -1909,7 +1952,7 @@ export default function App() {
       {toast && (
         <div
           role="status"
-          className="fixed bottom-20 left-1/2 -translate-x-1/2 px-3 py-1.5 text-xs font-mono border shadow-2xl max-w-[80vw] truncate pointer-events-none"
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 px-3 py-1.5 text-xs font-mono border shadow-2xl max-w-[calc(100vw-2rem)] truncate pointer-events-none"
           style={{ zIndex: 90, backgroundColor: 'var(--app-surface-card-bg)', borderColor: theme.accent, color: theme.highlight, boxShadow: `0 0 14px ${theme.accentGlow}` }}
         >
           <span style={{ color: theme.accent }}>$ </span>
@@ -1948,8 +1991,6 @@ export default function App() {
           currentTheme={theme}
           onEditLayout={handleStartLayoutEditing}
           viewMode={viewMode}
-          artworkMode={asciiConfig.mode}
-          onApplySkin={handleApplySkin}
           customThemes={customThemes}
           appearance={appearance}
           preferences={{
@@ -1964,6 +2005,7 @@ export default function App() {
           onSyncAccount={handleSyncAccount}
           onDisconnect={() => { setSession(defaultSession); saveUserSession(defaultSession); }}
           onChangeAppearance={handleChangeAppearance}
+          onChangeSkin={handleChangeSkin}
           onChangeBackground={handleChangeBackground}
           onSaveCustomTheme={(value) => {
             const next = [...customThemes.filter(theme => theme.id !== value.id), value];
@@ -1979,10 +2021,11 @@ export default function App() {
             if (themeId === id) { setThemeId(DEFAULT_THEME_ID); saveThemeId(DEFAULT_THEME_ID); }
           }}
           onSelectTheme={(tId) => {
-            const selected = resolveTheme(tId, customThemes);
-            if (selected.look) handleApplySkin({ theme: selected, ...selected.look });
-            else { setThemeId(tId); saveThemeId(tId); }
+            setThemeId(tId);
+            saveThemeId(tId);
           }}
+          shortcuts={shortcuts}
+          onChangeShortcuts={handleChangeShortcuts}
           onClose={() => setSettingsTab(null)}
         />
       )}

@@ -94,7 +94,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
       // Padding px-2 is 8px left + 8px right = 16px. Plus 2 brackets '[' and ']' = 2 * charWidth.
       const available = containerWidth - 16 - (2 * charWidth);
       if (available > 0 && charWidth > 0) {
-        const blocks = Math.max(10, Math.floor(available / charWidth));
+        const blocks = Math.max(4, Math.floor(available / charWidth));
         setTotalBlocks(blocks);
       }
     };
@@ -133,10 +133,11 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
     [duration]
   );
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (duration <= 0 || e.button !== 0) return;
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (duration <= 0 || e.button !== 0 || !e.isPrimary) return;
     e.preventDefault();
 
+    const pointerId = e.pointerId;
     const initialTime = getTimeFromClientX(e.clientX);
     hasDraggedRef.current = false;
     dragTimeRef.current = initialTime;
@@ -144,14 +145,16 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
     setDragTime(initialTime);
     onSeek(initialTime);
 
-    const handleMouseMoveWindow = (moveEvent: MouseEvent) => {
+    const handlePointerMoveWindow = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
       hasDraggedRef.current = true;
       const scrubTime = getTimeFromClientX(moveEvent.clientX);
       dragTimeRef.current = scrubTime;
       setDragTime(scrubTime);
     };
 
-    const handleMouseUpWindow = () => {
+    const handlePointerUpWindow = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
       if (hasDraggedRef.current && dragTimeRef.current !== null) {
         onSeek(dragTimeRef.current);
       }
@@ -162,14 +165,16 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
     };
 
     const cleanup = () => {
-      window.removeEventListener('mousemove', handleMouseMoveWindow);
-      window.removeEventListener('mouseup', handleMouseUpWindow);
+      window.removeEventListener('pointermove', handlePointerMoveWindow);
+      window.removeEventListener('pointerup', handlePointerUpWindow);
+      window.removeEventListener('pointercancel', handlePointerUpWindow);
       cleanupDragRef.current = null;
     };
     cleanupDragRef.current = cleanup;
 
-    window.addEventListener('mousemove', handleMouseMoveWindow);
-    window.addEventListener('mouseup', handleMouseUpWindow);
+    window.addEventListener('pointermove', handlePointerMoveWindow);
+    window.addEventListener('pointerup', handlePointerUpWindow);
+    window.addEventListener('pointercancel', handlePointerUpWindow);
   };
 
   const handleMouseMoveBar = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -197,13 +202,14 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
       {/* Main Player Row */}
       <div className="player-row p-3 flex flex-col items-center justify-between gap-3">
         {/* Left: Current Track Details */}
-        <div className="player-track flex items-center gap-3 w-full min-w-0">
+        <div className="player-track flex items-center gap-2.5 w-full min-w-0">
           {currentTrack ? (
             <>
               {/* Like Heart Button */}
               <button
                 onClick={onToggleLike}
-                className="hover:scale-125 transition-transform flex-shrink-0"
+                aria-label={currentTrack.isLiked ? 'Unlike song' : 'Like song'}
+                className="hover:scale-125 transition-transform shrink-0"
                 title={currentTrack.isLiked ? 'Unlike song' : 'Like song'}
               >
                 <Heart
@@ -213,17 +219,17 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
                 />
               </button>
 
-              <div className="flex flex-col truncate">
-                <div className="flex items-center gap-1.5 truncate">
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <span className="font-bold truncate" style={{ color: theme.highlight }}>
                     {currentTrack.title}
                   </span>
                 </div>
-                <div className="text-[11px] truncate flex items-center gap-2" style={{ color: theme.textDim }}>
+                <div className="text-[11px] min-w-0 truncate flex items-center gap-1.5" style={{ color: theme.textDim }}>
                   <span className="truncate">{currentTrack.artist}</span>
                   {currentTrack.album && (
                     <>
-                      <span>•</span>
+                      <span className="shrink-0">•</span>
                       <span className="truncate opacity-80">{currentTrack.album}</span>
                     </>
                   )}
@@ -231,19 +237,21 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
               </div>
             </>
           ) : (
-            <div className="text-[11px]" style={{ color: theme.textDim }}>
+            <div className="text-[11px] truncate" style={{ color: theme.textDim }}>
               [ No track playing. Select a song to begin ]
             </div>
           )}
         </div>
 
         {/* Center: Interactive ASCII Progress Bar */}
-        <div className="player-timeline flex-1 min-w-0 w-full max-w-xl flex flex-col gap-1 items-center">
+        <div className="player-timeline flex-1 min-w-0 w-full flex flex-col gap-1 items-center">
           {/* Controls button row */}
-          <div className="flex items-center gap-3">
+          <div className="player-controls flex flex-wrap items-center justify-center gap-3">
             {/* Shuffle */}
             <button
               onClick={onToggleShuffle}
+              aria-label="Shuffle"
+              aria-pressed={shuffle}
               className="p-1 hover:brightness-125 transition-colors"
               title="Shuffle [s]"
               style={{ color: shuffle ? theme.accent : theme.textDim }}
@@ -254,6 +262,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
             {/* Prev */}
             <button
               onClick={onPrev}
+              aria-label="Previous track"
               className="p-1 hover:brightness-125 transition-colors"
               title="Previous [p]"
               style={{ color: theme.text }}
@@ -264,7 +273,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
             {/* Play/Pause */}
             <button
               onClick={onTogglePlay}
-              className="play-toggle px-2.5 py-1 border hover:brightness-125 transition-all font-bold flex items-center justify-center gap-1.5"
+              className="play-toggle px-2.5 py-1 border hover:brightness-125 transition-all font-bold flex items-center justify-center gap-1.5 whitespace-nowrap"
               aria-label={isBuffering ? 'Buffering' : isPlaying ? 'Pause' : 'Play'}
               title="Play/Pause [Space]"
               style={{
@@ -275,18 +284,18 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
             >
               {isBuffering ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  {controlStyle === 'terminal' && <span>BUFFERING</span>}
+                  <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                  {controlStyle === 'terminal' && <span className="play-toggle-label">BUFFERING</span>}
                 </>
               ) : isPlaying ? (
                 <>
-                  <Pause className="w-3.5 h-3.5 fill-current" />
-                  {controlStyle === 'terminal' && <span>PAUSE</span>}
+                  <Pause className="w-3.5 h-3.5 shrink-0 fill-current" />
+                  {controlStyle === 'terminal' && <span className="play-toggle-label">PAUSE</span>}
                 </>
               ) : (
                 <>
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  {controlStyle === 'terminal' && <span>PLAY</span>}
+                  <Play className="w-3.5 h-3.5 shrink-0 fill-current" />
+                  {controlStyle === 'terminal' && <span className="play-toggle-label">PLAY</span>}
                 </>
               )}
             </button>
@@ -294,6 +303,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
             {/* Next */}
             <button
               onClick={onNext}
+              aria-label="Next track"
               className="p-1 hover:brightness-125 transition-colors"
               title="Next [n]"
               style={{ color: theme.text }}
@@ -304,6 +314,7 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
             {/* Repeat */}
             <button
               onClick={onCycleRepeat}
+              aria-label={`Repeat: ${repeat}`}
               className="p-1 hover:brightness-125 transition-colors flex items-center gap-0.5"
               title={`Repeat: ${repeat} [r]`}
               style={{ color: repeat !== 'off' ? theme.accent : theme.textDim }}
@@ -323,10 +334,10 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
           </span>
 
           {/* ASCII Progress Bar Graphic */}
-          <div className="w-full flex items-center justify-between gap-2 px-1">
+          <div className="player-timeline-bar w-full min-w-0 flex items-center justify-between gap-2 px-1">
             {/* Current Time */}
             <span
-              className="text-[11px] font-mono w-10 text-right select-none"
+              className="player-time-current text-[11px] font-mono w-10 shrink-0 text-right select-none"
               style={{ color: theme.accent }}
             >
               {formatTime(displayTime)}
@@ -339,12 +350,12 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
               className="min-w-0 flex-1 cursor-pointer disabled:opacity-40"
               onChange={event => onSeek(Number(event.target.value))} /> : <div
               ref={barContainerRef}
-              onMouseDown={handleMouseDown}
+              onPointerDown={handlePointerDown}
               onMouseEnter={() => setIsHovered(true)}
               onMouseMove={handleMouseMoveBar}
               onMouseLeave={handleMouseLeaveBar}
               title={duration > 0 && hoverTime !== null ? `Seek: ${formatTime(hoverTime)}` : undefined}
-              className={`ascii-progress flex-1 border px-2 py-0.5 font-mono text-[11px] tracking-wider text-center select-none transition-colors overflow-hidden truncate ${duration > 0 ? 'cursor-pointer' : 'cursor-default'
+              className={`ascii-progress min-w-0 flex-1 border px-2 py-0.5 font-mono text-[11px] tracking-wider text-center select-none touch-none transition-colors overflow-hidden truncate ${duration > 0 ? 'cursor-pointer' : 'cursor-default'
                 }`}
               style={{
                 borderColor: isHovered || isDragging ? theme.accent : theme.border,
@@ -359,21 +370,23 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
 
             {/* Total / Remaining Time */}
             <span
-              className="text-[11px] font-mono text-left flex gap-1 select-none"
+              className="text-[11px] font-mono shrink-0 text-left flex gap-1 select-none"
               style={{ color: theme.textDim }}
             >
               <span style={{ color: theme.text }}>{formatTime(duration)}</span>
-              <span className="opacity-60 hidden sm:inline">(-{formatTime(remainingTime)})</span>
+              <span className="player-remaining opacity-60">(-{formatTime(remainingTime)})</span>
             </span>
           </div>
         </div>
 
         {/* Right: Volume Slider & Shortcut hints */}
-        <div className="player-volume flex items-center justify-end gap-3 w-full">
-          <div className="flex items-center gap-2">
+        <div className="player-volume flex items-center justify-end gap-3 w-full min-w-0">
+          <div className="player-volume-controls flex min-w-0 items-center gap-2">
             <button
               onClick={onToggleMute}
-              className="hover:brightness-125 transition-colors"
+              aria-label={isMuted ? 'Unmute' : 'Mute'}
+              aria-pressed={isMuted}
+              className="shrink-0 hover:brightness-125 transition-colors"
               title="Mute/Unmute [m]"
               style={{ color: isMuted ? theme.error : theme.accent }}
             >
@@ -386,9 +399,9 @@ export const BottomPlayerBar: React.FC<BottomPlayerBarProps> = ({
               max="100"
               value={isMuted ? 0 : volume}
               onChange={(e) => onVolumeChange(Number(e.target.value))}
-              className="w-20 accent-[#87cf3e] cursor-pointer"
+              className="player-volume-slider w-20 accent-[#87cf3e] cursor-pointer"
             />
-            <span className="text-[11px] w-8 font-mono" style={{ color: theme.textDim }}>
+            <span className="text-[11px] w-8 shrink-0 text-right font-mono" style={{ color: theme.textDim }}>
               {isMuted ? '0%' : `${volume}%`}
             </span>
           </div>
