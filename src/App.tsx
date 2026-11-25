@@ -3,6 +3,7 @@ import { version as appVersion } from '../package.json';
 import {
   Album,
   AppearanceConfig,
+  AudioMixerState,
   BackgroundConfig,
   DockLayout,
   DockPanelId,
@@ -23,7 +24,7 @@ import {
 import { DEFAULT_THEME_ID, THEMES } from './data/themes';
 import { getFontFamily, loadAppearance, loadCustomThemes, normalizeAppearance, resolveTheme, saveAppearance, saveCustomThemes } from './services/themeStorage';
 import { normalizeSkin, skinVariables } from './services/skin';
-import { createDockLayout, dockPanels } from './services/dockLayout';
+import { addDockPanel, createDockLayout, dockPanels } from './services/dockLayout';
 import {
   defaultSession,
   loadAsciiConfig,
@@ -44,6 +45,7 @@ import {
   saveUserSession,
 } from './services/libraryStorage';
 import { audioEngine } from './services/youtubeAudioEngine';
+import { loadAudioMixerState, normalizeAudioMixerState, saveAudioMixerState } from './services/audioMixerStorage';
 import { syncYouTubeLibrary } from './services/youtubeAccount';
 import { loadCoverArtwork } from './services/coverArtwork';
 import { applyTrackAlbum, loadTrackAlbum, normalizeTrackAlbum } from './services/trackAlbum';
@@ -82,6 +84,7 @@ import { DockWorkspace } from './components/DockWorkspace';
 import { TrackListView, formatSeconds } from './components/TrackListView';
 import { AsciiArtViewer } from './components/AsciiArtViewer';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
+import { AudioMixer } from './components/AudioMixer';
 import { LyricsView } from './components/LyricsView';
 import { BottomPlayerBar } from './components/BottomPlayerBar';
 import { AuthModal } from './components/AuthModal';
@@ -134,7 +137,9 @@ export default function App() {
   const initialPreferences = React.useMemo(() => loadPlayerPreferences(), []);
   const [sidebarPreferences, setSidebarPreferences] = useState<SidebarPreferences>(loadSidebarPreferences);
   const visibleLibraryCategories = React.useMemo(() => getVisibleLibraryCategories(sidebarPreferences), [sidebarPreferences]);
-  const sidebarAvailable = visibleLibraryCategories.length > 0 || sidebarPreferences.showPlaylists;
+  const hasLibrarySection = visibleLibraryCategories.length > 0;
+  const hasPlaylistsSection = sidebarPreferences.showPlaylists;
+  const sidebarAvailable = hasLibrarySection || hasPlaylistsSection;
 
   // Library & Playlists State
   const [playlists, setPlaylists] = useState<Playlist[]>(loadPlaylists);
@@ -155,11 +160,41 @@ export default function App() {
   const [viewMode, setViewMode] = useState<TuiViewMode>(initialPreferences.viewMode);
   const [isLayoutEditing, setIsLayoutEditing] = useState(false);
   const [draftLayout, setDraftLayout] = useState<DockLayout | null>(null);
-  const defaultDockLayout = React.useMemo(() => createDockLayout(viewMode === 'custom' ? 'split' : viewMode,
-    appearance.skin, sidebarAvailable), [viewMode, appearance.skin.sidebar, appearance.skin.playerPosition, sidebarAvailable]);
+  const defaultDockLayout = React.useMemo(
+    () => createDockLayout(
+      viewMode === 'custom' ? 'split' : viewMode,
+      appearance.skin,
+      sidebarAvailable,
+      { library: hasLibrarySection, playlists: hasPlaylistsSection },
+    ),
+    [viewMode, appearance.skin.sidebar, appearance.skin.playerPosition, sidebarAvailable, hasLibrarySection, hasPlaylistsSection],
+  );
   const dockLayout = draftLayout || appearance.skin.layout || defaultDockLayout;
   const customWorkspace = isLayoutEditing || viewMode === 'custom';
-  const hasSidebar = sidebarAvailable && (customWorkspace ? dockPanels(dockLayout.root).includes('sidebar') : appearance.skin.sidebar !== 'hidden');
+  const activeDockPanels = dockPanels(dockLayout.root);
+  const hasSidebar = sidebarAvailable && (customWorkspace
+    ? activeDockPanels.includes('sidebar') || activeDockPanels.includes('playlists')
+    : appearance.skin.sidebar !== 'hidden');
+
+  // One-time migration for existing saved layouts created before Library and Playlists were separated.
+  useEffect(() => {
+    try {
+      const migrationKey = 'youterm_dock_playlists_split_v1';
+      if (localStorage.getItem(migrationKey)) return;
+      localStorage.setItem(migrationKey, '1');
+      const savedLayout = appearanceRef.current.skin.layout;
+      if (savedLayout) {
+        const panels = dockPanels(savedLayout.root);
+        if (panels.includes('sidebar') && !panels.includes('playlists')) {
+          const upgraded = addDockPanel(savedLayout, 'playlists');
+          handleChangeAppearance({
+            ...appearanceRef.current,
+            skin: { ...appearanceRef.current.skin, layout: upgraded },
+          });
+        }
+      }
+    } catch {}
+  }, [handleChangeAppearance]);
   const [selectedTrackIndex, setSelectedTrackIndex] = useState<number>(0);
   const [isSidebarFocused, setIsSidebarFocused] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -194,6 +229,19 @@ export default function App() {
   const [asciiResult, setAsciiResult] = useState<AsciiResult | null>(null);
   const [backgroundAscii, setBackgroundAscii] = useState<AsciiResult | null>(null);
   const [isAsciiLoading, setIsAsciiLoading] = useState<boolean>(false);
+
+  // Audio Mixer & Equalizer State
+  const [mixerState, setMixerState] = useState<AudioMixerState>(loadAudioMixerState);
+  const handleChangeMixer = useCallback((next: AudioMixerState) => {
+    const normalized = normalizeAudioMixerState(next);
+    setMixerState(normalized);
+    saveAudioMixerState(normalized);
+    audioEngine.setMixerState(normalized);
+  }, []);
+
+  useEffect(() => {
+    audioEngine.setMixerState(mixerState);
+  }, [mixerState]);
 
   // Player State - Starts clean and loads live from YouTube Music
   const [playerState, setPlayerState] = useState<PlayerState>({
@@ -722,10 +770,15 @@ export default function App() {
     } else {
       if (playerState.currentTrack?.youtubeId && audioEngine.getCurrentVideoId() !== playerState.currentTrack.youtubeId) {
         audioEngine.loadAndPlay(playerState.currentTrack.youtubeId);
+        setPlayerState((prev) => ({ ...prev, isPlaying: true, isBuffering: true }));
       } else {
         audioEngine.play();
+        setPlayerState((prev) => ({
+          ...prev,
+          isPlaying: true,
+          isBuffering: !audioEngine.isReadyForPlayback(),
+        }));
       }
-      setPlayerState((prev) => ({ ...prev, isPlaying: true }));
     }
   }, [playerState.currentTrack, playerState.isPlaying, displayedTracks, handlePlayTrack]);
 
@@ -899,6 +952,9 @@ export default function App() {
           }
           return {
             ...prev,
+            isBuffering: prev.isBuffering && prev.isPlaying && currentTime > prev.currentTime + 0.01
+              ? false
+              : prev.isBuffering,
             currentTime,
             duration: validDuration > 0 ? validDuration : prev.duration,
             currentTrack: updatedTrack,
@@ -1605,9 +1661,10 @@ export default function App() {
   };
 
 
-  const sidebarPanel = (
+  const renderSidebarSection = (section: 'library' | 'playlists') => (
     <Sidebar
       theme={theme}
+      section={section}
       showBackground={backgroundVisible && appearance.background.showInSidebar}
       preferences={sidebarPreferences}
       onChangePreferences={handleChangeSidebarPreferences}
@@ -1637,6 +1694,27 @@ export default function App() {
       isFocused={isSidebarFocused}
       isLoggedIn={session.isLoggedIn}
     />
+  );
+
+  const libraryPanel = renderSidebarSection('library');
+  const playlistsPanel = renderSidebarSection('playlists');
+  const sidebarPanel = hasLibrarySection && hasPlaylistsSection ? (
+    <ResizableSplit
+      theme={theme}
+      storageKey="sidebar-sections"
+      axis="column"
+      label="Resize library and playlists"
+      spacing={appearance.skin.panelGap}
+      defaultSize={46}
+      minFirst={96}
+      minSecond={110}
+      first={libraryPanel}
+      second={playlistsPanel}
+    />
+  ) : hasLibrarySection ? (
+    libraryPanel
+  ) : (
+    playlistsPanel
   );
 
   const trackListPanel = (
@@ -1733,6 +1811,16 @@ export default function App() {
     />
   );
 
+  const mixerPanel = (
+    <AudioMixer
+      theme={theme}
+      mixerState={mixerState}
+      onChangeMixer={handleChangeMixer}
+      isPlaying={playerState.isPlaying}
+      currentTrack={playerState.currentTrack}
+    />
+  );
+
   const playerPanel = (
     <BottomPlayerBar
       theme={theme}
@@ -1755,11 +1843,14 @@ export default function App() {
   );
 
   const renderDockPanel = (id: DockPanelId): React.ReactNode => {
-    if (id === 'sidebar' && !sidebarAvailable) return <div className="flex flex-1 items-center justify-center p-4 text-center text-xs" style={{ color: theme.textDim }}>
-      Library sections are hidden. Enable them in Settings → General.
+    if (id === 'sidebar' && !hasLibrarySection) return <div className="flex flex-1 items-center justify-center p-4 text-center text-xs" style={{ color: theme.textDim }}>
+      Library categories are hidden. Enable them in Settings → General.
     </div>;
-    return ({ sidebar: sidebarPanel, tracks: trackListPanel, artwork: artworkPanel,
-      lyrics: lyricsPanel, spectrum: spectrumPanel, player: playerPanel })[id];
+    if (id === 'playlists' && !hasPlaylistsSection) return <div className="flex flex-1 items-center justify-center p-4 text-center text-xs" style={{ color: theme.textDim }}>
+      Playlists are hidden. Enable them in Settings → General.
+    </div>;
+    return ({ sidebar: libraryPanel, playlists: playlistsPanel, tracks: trackListPanel, artwork: artworkPanel,
+      lyrics: lyricsPanel, spectrum: spectrumPanel, mixer: mixerPanel, player: playerPanel })[id];
   };
 
 
@@ -1913,7 +2004,7 @@ export default function App() {
           {/* The custom workspace keeps every panel independently movable. */}
           {customWorkspace ? <DockWorkspace layout={dockLayout} editing={isLayoutEditing} theme={theme}
             spacing={appearance.skin.panelGap} renderPanel={renderDockPanel} onChange={handleDockLayoutChange}
-            onReset={() => createDockLayout('split', appearance.skin, sidebarAvailable)}
+            onReset={() => createDockLayout('split', appearance.skin, sidebarAvailable, { library: hasLibrarySection, playlists: hasPlaylistsSection })}
             onSave={handleSaveLayout} onCancel={handleCancelLayout} /> :
           <ResizableSplit theme={theme} storageKey="sidebar" label="Resize sidebar"
             reverse={appearance.skin.sidebar === 'right'} spacing={appearance.skin.panelGap}

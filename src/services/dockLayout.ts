@@ -1,7 +1,14 @@
 import type { DockLayout, DockNode, DockPanelId, DockPosition, SkinConfig, TuiViewMode } from '../types';
 
 export const DOCK_PANELS: Record<DockPanelId, string> = {
-  sidebar: 'Library', tracks: 'Tracks', artwork: 'Artwork', lyrics: 'Lyrics', spectrum: 'Spectrum', player: 'Playback',
+  sidebar: 'Library',
+  playlists: 'Playlists',
+  tracks: 'Tracks',
+  artwork: 'Artwork',
+  lyrics: 'Lyrics',
+  spectrum: 'Spectrum',
+  mixer: 'Mixer',
+  player: 'Playback',
 };
 const panel = (id: DockPanelId): DockNode => ({ type: 'panel', panel: id });
 const split = (axis: 'row' | 'column', first: DockNode, second: DockNode, ratio = 50): DockNode => ({
@@ -12,11 +19,27 @@ export function dockPanels(node: DockNode): DockPanelId[] {
   return node.type === 'panel' ? [node.panel] : [...dockPanels(node.first), ...dockPanels(node.second)];
 }
 
-export function createDockLayout(mode: TuiViewMode, skin: Pick<SkinConfig, 'sidebar' | 'playerPosition'>, showSidebar = true): DockLayout {
+export function createDockLayout(
+  mode: TuiViewMode,
+  skin: Pick<SkinConfig, 'sidebar' | 'playerPosition'>,
+  showSidebar = true,
+  sections: { library?: boolean; playlists?: boolean } = {},
+): DockLayout {
   let content = mode === 'ascii_cover' ? panel('artwork') : mode === 'visualizer' ? panel('spectrum')
     : mode === 'tracklist' ? panel('tracks') : split('row', panel('tracks'), split('row', panel('artwork'), panel('lyrics'), 55), 44);
   if (showSidebar && skin.sidebar !== 'hidden') {
-    content = skin.sidebar === 'right' ? split('row', content, panel('sidebar'), 78) : split('row', panel('sidebar'), content, 22);
+    const hasLibrary = sections.library ?? true;
+    const hasPlaylists = sections.playlists ?? true;
+    const rail = hasLibrary && hasPlaylists
+      ? split('column', panel('sidebar'), panel('playlists'), 46)
+      : hasPlaylists
+        ? panel('playlists')
+        : hasLibrary
+          ? panel('sidebar')
+          : null;
+    if (rail) {
+      content = skin.sidebar === 'right' ? split('row', content, rail, 78) : split('row', rail, content, 22);
+    }
   }
   return { version: 1, root: skin.playerPosition === 'top'
     ? split('column', panel('player'), content, 16) : split('column', content, panel('player'), 84) };
@@ -90,9 +113,15 @@ export function moveDockPanel(layout: DockLayout, source: DockPanelId, target: D
 export function addDockPanel(layout: DockLayout, id: DockPanelId): DockLayout {
   const panels = dockPanels(layout.root);
   if (panels.includes(id)) return layout;
+  if (id === 'playlists' && panels.includes('sidebar')) {
+    return { ...layout, root: insertNode(layout.root, 'playlists', 'sidebar', 'bottom') };
+  }
+  if (id === 'sidebar' && panels.includes('playlists')) {
+    return { ...layout, root: insertNode(layout.root, 'sidebar', 'playlists', 'top') };
+  }
   // Keep the usual sidebar and player proportions when adding them back.
   return { ...layout, root: id === 'player' ? split('column', layout.root, panel(id), 80)
-    : id === 'sidebar' ? split('row', panel(id), layout.root, 22) : split('row', layout.root, panel(id), 65) };
+    : id === 'sidebar' || id === 'playlists' ? split('row', panel(id), layout.root, 22) : split('row', layout.root, panel(id), 65) };
 }
 
 export function resizeDockSplit(layout: DockLayout, id: string, ratio: number): DockLayout {

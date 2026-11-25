@@ -43,7 +43,7 @@ export function LayoutSettings({ theme, skin, viewMode, onChangeSkin, onEditLayo
           <span className="mt-1 block text-[11px]" style={{ color: theme.textDim }}>
             {skin.layout
               ? `${dockPanels(skin.layout.root).length} panels in your saved layout.`
-              : 'Move artwork, lyrics, tracks, the library, spectrum and playback controls by dragging.'}
+              : 'Move artwork, lyrics, tracks, the library, playlists, spectrum, mixer and playback controls by dragging.'}
           </span>
         </span>
         <button

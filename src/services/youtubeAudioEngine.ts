@@ -1,3 +1,12 @@
+import type { AudioMixerState } from '../types';
+import {
+  computeEffectivePreampDb,
+  DEFAULT_AUDIO_MIXER_STATE,
+  loadAudioMixerState,
+  MIXER_ISO_BANDS,
+  normalizeAudioMixerState,
+} from './audioMixerStorage';
+
 export type AudioEngineStateCallback = (state: number) => void;
 export type AudioEngineTimeCallback = (currentTime: number, duration: number) => void;
 export type AudioEngineErrorCallback = (errorCode: number, videoId: string, message?: string) => void;
@@ -9,9 +18,47 @@ const AUDIO_TYPES: Record<AudioFormat, string> = {
   webm: 'audio/webm; codecs="opus"',
 };
 
+function isMixerEqActive(state: AudioMixerState): boolean {
+  if (!state.enabled) return false;
+  return (
+    Math.abs(state.bass) >= 0.1 ||
+    Math.abs(state.mid) >= 0.1 ||
+    Math.abs(state.treble) >= 0.1 ||
+    Math.abs(state.subBass) >= 0.1 ||
+    Math.abs(state.presence) >= 0.1 ||
+    Math.abs(state.air) >= 0.1 ||
+    Math.abs(state.balance) >= 1 ||
+    state.compressor ||
+    state.mono ||
+    state.bands.some(b => Math.abs(b) >= 0.1)
+  );
+}
+
+function buildMixerEqQuery(state: AudioMixerState): string {
+  if (!isMixerEqActive(state)) return '';
+  const { effectivePreampDb } = computeEffectivePreampDb(state);
+  const params = new URLSearchParams();
+  params.set('eq', '1');
+  params.set('bass', state.bass.toFixed(1));
+  params.set('mid', state.mid.toFixed(1));
+  params.set('treble', state.treble.toFixed(1));
+  params.set('sub', state.subBass.toFixed(1));
+  params.set('pres', state.presence.toFixed(1));
+  params.set('air', state.air.toFixed(1));
+  params.set('preamp', effectivePreampDb.toFixed(1));
+  params.set('pan', (state.balance / 100).toFixed(2));
+  if (state.compressor) params.set('comp', '1');
+  if (state.mono) params.set('mono', '1');
+  params.set('bands', state.bands.map(b => b.toFixed(1)).join(','));
+  return params.toString();
+}
+
 // Preserve the player's state values: ended=0, playing=1, paused=2, buffering=3.
 export class YouTubeAudioEngine {
   private audio: HTMLAudioElement | null = null;
+  private swapAudio: HTMLAudioElement | null = null;
+  private swapTimer: ReturnType<typeof setTimeout> | null = null;
+  private activeEqSignature = '';
   private currentVideoId: string | null = null;
   private currentVolume = 100;
   private muted = false;
@@ -27,15 +74,46 @@ export class YouTubeAudioEngine {
   private warmingSources = false;
   private sourcePreparation: Promise<void> = Promise.resolve();
   private preparedSources = new Map<string, number>();
+
+  // Secondary silent WebAudio tap strictly for SpectrumVisualizer & Mixer VU meters.
+  // Never attaches createMediaElementSource to `this.audio` so native playback is never muted.
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
+  private analyserLeft: AnalyserNode | null = null;
+  private analyserRight: AnalyserNode | null = null;
+  private analyserSplitter: ChannelSplitterNode | null = null;
   private analyserGain: GainNode | null = null;
   private analyserAudio: HTMLAudioElement | null = null;
+  private analyserTapSrc = '';
+  private analyserPreamp: GainNode | null = null;
+  private analyserSubBass: BiquadFilterNode | null = null;
+  private analyserBass: BiquadFilterNode | null = null;
+  private analyserMid: BiquadFilterNode | null = null;
+  private analyserPresence: BiquadFilterNode | null = null;
+  private analyserTreble: BiquadFilterNode | null = null;
+  private analyserAir: BiquadFilterNode | null = null;
+  private analyserEqFilters: BiquadFilterNode[] = [];
+
+  private mixerState: AudioMixerState = typeof window !== 'undefined'
+    ? loadAudioMixerState()
+    : { ...DEFAULT_AUDIO_MIXER_STATE, bands: [...DEFAULT_AUDIO_MIXER_STATE.bands] };
+
   private onStateChangeCallback?: AudioEngineStateCallback;
   private onTimeUpdateCallback?: AudioEngineTimeCallback;
   private onErrorCallback?: AudioEngineErrorCallback;
   private onFormatChangeCallback?: AudioEngineFormatCallback;
   private stallWatchdog: ReturnType<typeof setTimeout> | null = null;
+  private lastEmittedState: number | null = null;
+  private streamRecoveryCount = 0;
+  private lastAnalyserSeekAt = 0;
+  private lastAnalyserPlayAt = 0;
+
+  private emitState(audio: HTMLAudioElement, state: number) {
+    if (this.audio !== audio) return;
+    if (this.lastEmittedState === state && (state === 1 || state === 3)) return;
+    this.lastEmittedState = state;
+    this.onStateChangeCallback?.(state);
+  }
 
   private clearWatchdog() {
     if (this.stallWatchdog) {
@@ -44,21 +122,56 @@ export class YouTubeAudioEngine {
     }
   }
 
-  private resetWatchdog(timeoutMs = 15000) {
+  private clearSwap() {
+    if (this.swapTimer) {
+      clearTimeout(this.swapTimer);
+      this.swapTimer = null;
+    }
+    if (this.swapAudio) {
+      const pending = this.swapAudio;
+      this.swapAudio = null;
+      pending.pause();
+      pending.removeAttribute('src');
+      pending.load();
+    }
+  }
+
+  private recoverMidStream(audio: HTMLAudioElement, videoId: string): boolean {
+    if (this.audio !== audio || !this.playbackRequested || this.streamRecoveryCount >= 2) {
+      return false;
+    }
+    this.streamRecoveryCount += 1;
+    const resumeAt = Number.isFinite(audio.currentTime) && audio.currentTime > 0.5 ? audio.currentTime : 0;
+    this.loadAudio(videoId, this.currentFormat, resumeAt);
+    return true;
+  }
+
+  private resetWatchdog(timeoutMs = 12000) {
     this.clearWatchdog();
     if (this.playbackRequested) {
       this.stallWatchdog = setTimeout(() => {
         const audio = this.audio;
         const videoId = this.currentVideoId;
-        if (!audio || !videoId) return;
+        if (!audio || !videoId || !this.playbackRequested) return;
+        // If playback is actually ready and advancing, clear buffering instead of triggering an error.
+        if (!audio.paused && !audio.ended && audio.readyState >= 3) {
+          this.emitState(audio, 1);
+          return;
+        }
         if (audio.paused && !audio.ended) {
           audio.play().catch(() => {});
         }
-        if (audio.readyState < 2 || audio.paused) {
-          void this.reportMediaError(audio, videoId);
+        if (audio.readyState < 3 || audio.paused) {
+          if (!this.recoverMidStream(audio, videoId)) {
+            void this.reportMediaError(audio, videoId);
+          }
         }
       }, timeoutMs);
     }
+  }
+
+  public isReadyForPlayback(): boolean {
+    return !!this.audio && this.audio.readyState >= 3 && !this.audio.error;
   }
 
   public setCallbacks(
@@ -77,7 +190,9 @@ export class YouTubeAudioEngine {
     if (!videoId || typeof Audio === 'undefined') return;
     this.sourceQueue = [];
     this.clearWatchdog();
+    this.clearSwap();
     this.attemptedFormats.clear();
+    this.streamRecoveryCount = 0;
     this.isChangingFormat = false;
     this.loadAudio(videoId);
   }
@@ -162,8 +277,250 @@ export class YouTubeAudioEngine {
     prepared.audio.load();
   }
 
+  private computeElementVolume(): number {
+    const { effectivePreampDb } = computeEffectivePreampDb(this.mixerState);
+    const preampGain = this.mixerState.enabled && !this.activeEqSignature
+      ? Math.pow(10, effectivePreampDb / 20)
+      : 1;
+    return Math.max(0, Math.min(1, (this.currentVolume / 100) * preampGain));
+  }
+
+  private syncVolumeToAudio(target: HTMLAudioElement | null = this.audio) {
+    if (!target) return;
+    target.volume = this.computeElementVolume();
+    target.muted = this.muted;
+  }
+
+  private updateAnalyserFilters() {
+    const active = this.mixerState.enabled;
+    const { effectivePreampDb } = computeEffectivePreampDb(this.mixerState);
+    if (this.analyserPreamp) {
+      this.analyserPreamp.gain.value = active ? Math.pow(10, effectivePreampDb / 20) : 1.0;
+    }
+    if (this.analyserSubBass) this.analyserSubBass.gain.value = active ? this.mixerState.subBass : 0;
+    if (this.analyserBass) this.analyserBass.gain.value = active ? this.mixerState.bass : 0;
+    if (this.analyserMid) this.analyserMid.gain.value = active ? this.mixerState.mid : 0;
+    if (this.analyserPresence) this.analyserPresence.gain.value = active ? this.mixerState.presence : 0;
+    if (this.analyserTreble) this.analyserTreble.gain.value = active ? this.mixerState.treble : 0;
+    if (this.analyserAir) this.analyserAir.gain.value = active ? this.mixerState.air : 0;
+    for (let i = 0; i < this.analyserEqFilters.length; i++) {
+      this.analyserEqFilters[i].gain.value = active ? (this.mixerState.bands[i] || 0) : 0;
+    }
+  }
+
+  public getMixerState(): AudioMixerState {
+    return this.mixerState;
+  }
+
+  public setMixerState(state: AudioMixerState) {
+    this.mixerState = normalizeAudioMixerState(state);
+    this.syncVolumeToAudio();
+    this.updateAnalyserFilters();
+    this.scheduleEqHotSwap();
+  }
+
+  /**
+   * Prepares an equalized GStreamer stream in the background while `this.audio` continues playing
+   * uninterrupted, swapping over only once the new stream is ready and playing at the current timestamp.
+   */
+  private scheduleEqHotSwap(delayMs = 380) {
+    const nextSignature = buildMixerEqQuery(this.mixerState);
+    if (nextSignature === this.activeEqSignature) {
+      this.clearSwap();
+      return;
+    }
+    if (this.swapTimer) {
+      clearTimeout(this.swapTimer);
+      this.swapTimer = null;
+    }
+    const videoId = this.currentVideoId;
+    const currentAudio = this.audio;
+    if (!videoId || !currentAudio) return;
+
+    this.swapTimer = setTimeout(() => {
+      this.swapTimer = null;
+      if (this.currentVideoId !== videoId || !this.audio) return;
+      const targetSignature = buildMixerEqQuery(this.mixerState);
+      if (targetSignature === this.activeEqSignature) return;
+
+      if (this.swapAudio) {
+        this.swapAudio.pause();
+        this.swapAudio.removeAttribute('src');
+        this.swapAudio.load();
+        this.swapAudio = null;
+      }
+
+      const wasPlaying = this.playbackRequested && !this.audio.paused && !this.audio.ended;
+      const next = new Audio();
+      next.preload = 'auto';
+      next.volume = this.computeElementVolume();
+      next.muted = this.muted;
+      this.swapAudio = next;
+
+      const format = this.currentFormat;
+      const queryParts: string[] = [];
+      if (format === 'webm') queryParts.push('format=webm');
+      if (targetSignature) queryParts.push(targetSignature);
+      const queryString = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+
+      let swapped = false;
+      const promoteSwap = () => {
+        if (swapped || this.swapAudio !== next || this.currentVideoId !== videoId) return;
+        swapped = true;
+        this.swapAudio = null;
+        const oldAudio = this.audio;
+        const targetTime = oldAudio ? oldAudio.currentTime : 0;
+        if (targetTime > 0 && Math.abs(next.currentTime - targetTime) > 0.25) {
+          try { next.currentTime = targetTime; } catch {}
+        }
+
+        const completePromotion = () => {
+          if (this.currentVideoId !== videoId) {
+            next.pause();
+            next.removeAttribute('src');
+            next.load();
+            return;
+          }
+          this.activeEqSignature = targetSignature;
+          this.attachPrimaryListeners(next, videoId, format);
+          this.audio = next;
+          this.syncVolumeToAudio(next);
+          if (oldAudio && oldAudio !== next) {
+            oldAudio.pause();
+            oldAudio.removeAttribute('src');
+            oldAudio.load();
+          }
+        };
+
+        if (wasPlaying || (this.playbackRequested && oldAudio && !oldAudio.paused)) {
+          next.play().then(completePromotion).catch(() => {
+            // If the equalized stream fails to play, keep the original audio playing uninterrupted.
+            next.pause();
+            next.removeAttribute('src');
+            next.load();
+          });
+        } else {
+          completePromotion();
+        }
+      };
+
+      next.addEventListener('canplay', promoteSwap, { once: true });
+      next.addEventListener('error', () => {
+        if (this.swapAudio === next) {
+          this.swapAudio = null;
+        }
+      }, { once: true });
+
+      next.src = `/api/audio/${encodeURIComponent(videoId)}/stream${queryString}`;
+      next.load();
+    }, delayMs);
+  }
+
+  private attachPrimaryListeners(audio: HTMLAudioElement, videoId: string, format: AudioFormat, resumeAt = 0) {
+    let lastProgressTime = -1;
+
+    const markPlaying = () => {
+      this.clearWatchdog();
+      if (this.audio === audio) {
+        this.streamRecoveryCount = 0;
+        this.preferredFormat = format;
+        this.isChangingFormat = false;
+        this.onFormatChangeCallback?.(format, false);
+        this.emitState(audio, 1);
+        this.syncAnalyserTap(true);
+      }
+    };
+
+    audio.addEventListener('playing', markPlaying);
+    audio.addEventListener('canplaythrough', () => {
+      if (this.audio !== audio) return;
+      if (this.playbackRequested && !audio.paused && !audio.ended) {
+        markPlaying();
+      }
+    });
+    audio.addEventListener('canplay', () => {
+      if (this.audio !== audio) return;
+      if (this.playbackRequested && audio.paused) {
+        audio.play().then(() => {
+          if (this.audio === audio && this.playbackRequested && !audio.paused && audio.readyState >= 3) {
+            markPlaying();
+          }
+        }).catch((error: DOMException) => {
+          if (this.audio === audio && error.name !== 'AbortError') {
+            void this.reportMediaError(audio, videoId, error);
+          }
+        });
+      } else if (this.playbackRequested && !audio.paused && audio.readyState >= 3) {
+        markPlaying();
+      }
+    });
+    audio.addEventListener('pause', () => {
+      this.clearWatchdog();
+      if (this.audio !== audio) return;
+      if (!audio.ended) this.emitState(audio, 2);
+      this.isChangingFormat = false;
+      this.onFormatChangeCallback?.(this.currentFormat, false);
+      if (this.analyserAudio && !this.analyserAudio.paused) {
+        this.analyserAudio.pause();
+      }
+    });
+    audio.addEventListener('waiting', () => {
+      if (this.audio === audio && this.playbackRequested && !audio.paused && audio.readyState < 3) {
+        this.emitState(audio, 3);
+        this.resetWatchdog(10000);
+      }
+    });
+    audio.addEventListener('stalled', () => {
+      if (this.audio === audio && this.playbackRequested && !audio.paused && !audio.ended && audio.readyState < 3) {
+        this.emitState(audio, 3);
+        this.resetWatchdog(6500);
+      }
+    });
+    audio.addEventListener('ended', () => {
+      this.clearWatchdog();
+      if (this.audio !== audio) return;
+      this.isChangingFormat = false;
+      this.onFormatChangeCallback?.(this.currentFormat, false);
+      if (this.analyserAudio) {
+        this.analyserAudio.pause();
+      }
+      this.emitState(audio, 0);
+    });
+    const updateTime = () => {
+      if (this.audio !== audio) return;
+      const nowTime = this.getCurrentTime();
+      if (nowTime > lastProgressTime + 0.01) {
+        lastProgressTime = nowTime;
+        this.clearWatchdog();
+        this.streamRecoveryCount = 0;
+        if (this.playbackRequested && !audio.paused && !audio.ended && audio.readyState >= 3) {
+          this.emitState(audio, 1);
+        }
+      }
+      this.onTimeUpdateCallback?.(nowTime, this.getDuration());
+    };
+    audio.addEventListener('timeupdate', updateTime);
+    audio.addEventListener('durationchange', updateTime);
+    audio.addEventListener('loadedmetadata', () => {
+      if (this.audio !== audio) return;
+      if (resumeAt > 0) this.seekTo(resumeAt);
+      updateTime();
+    });
+    audio.addEventListener('error', () => {
+      this.clearWatchdog();
+      if (this.audio !== audio) return;
+      if (audio.currentTime > 0.5 && this.recoverMidStream(audio, videoId)) {
+        return;
+      }
+      void this.reportMediaError(audio, videoId);
+    });
+  }
+
   private loadAudio(videoId: string, requestedFormat?: AudioFormat, resumeAt = 0) {
     const previous = this.audio;
+    this.clearSwap();
+    this.activeEqSignature = '';
+    this.lastEmittedState = null;
     let prepared = this.preparedAudio.get(videoId);
     if (prepared && (prepared.expiresAt <= Date.now() || prepared.audio.error)) {
       this.discardPrepared(videoId);
@@ -185,78 +542,27 @@ export class YouTubeAudioEngine {
       this.analyserAudio.pause();
     }
     audio.preload = 'auto';
-    audio.volume = this.currentVolume / 100;
-    audio.muted = this.muted;
+    this.syncVolumeToAudio(audio);
     this.currentFormat = requestedFormat ?? prepared?.format ?? this.chooseFormat(audio);
     this.attemptedFormats.add(this.currentFormat);
     const formatQuery = this.currentFormat === 'webm' ? '?format=webm' : '';
 
-    const onState = (state: number) => {
-      if (this.audio === audio) this.onStateChangeCallback?.(state);
-    };
-    const format = this.currentFormat;
-    audio.addEventListener('playing', () => {
-      this.clearWatchdog();
-      if (this.audio === audio) {
-        this.preferredFormat = format;
-        this.isChangingFormat = false;
-        this.onFormatChangeCallback?.(format, false);
-      }
-      onState(1);
-    });
-    audio.addEventListener('canplay', () => {
-      if (this.audio !== audio) return;
-      if (this.playbackRequested && audio.paused) {
-        audio.play().catch((error: DOMException) => {
-          if (this.audio === audio && error.name !== 'AbortError') {
-            void this.reportMediaError(audio, videoId, error);
-          }
-        });
-      }
-    });
-    audio.addEventListener('pause', () => {
-      this.clearWatchdog();
-      if (this.audio !== audio) return;
-      if (!audio.ended) onState(2);
-      this.isChangingFormat = false;
-      this.onFormatChangeCallback?.(this.currentFormat, false);
-    });
-    audio.addEventListener('waiting', () => {
-      if (this.audio === audio) {
-        onState(3);
-        this.resetWatchdog(12000);
-      }
-    });
-    audio.addEventListener('ended', () => {
-      this.clearWatchdog();
-      if (this.audio !== audio) return;
-      this.isChangingFormat = false;
-      this.onFormatChangeCallback?.(this.currentFormat, false);
-      if (this.analyserAudio) {
-        this.analyserAudio.pause();
-      }
-      onState(0);
-    });
-    const updateTime = () => {
-      if (this.audio === audio) this.onTimeUpdateCallback?.(this.getCurrentTime(), this.getDuration());
-    };
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('durationchange', updateTime);
-    audio.addEventListener('loadedmetadata', () => {
-      if (this.audio !== audio) return;
-      if (resumeAt > 0) this.seekTo(resumeAt);
-      updateTime();
-    });
-    audio.addEventListener('error', () => {
-      this.clearWatchdog();
-      void this.reportMediaError(audio, videoId);
-    });
+    this.attachPrimaryListeners(audio, videoId, this.currentFormat, resumeAt);
+
     if (!prepared) audio.src = `/api/audio/${encodeURIComponent(videoId)}/stream${formatQuery}`;
-    onState(3);
-    if (audio.readyState > 0) updateTime();
-    this.resetWatchdog(16000);
+    this.emitState(audio, audio.readyState >= 3 ? 1 : 3);
+    if (audio.readyState > 0) this.onTimeUpdateCallback?.(this.getCurrentTime(), this.getDuration());
+    this.resetWatchdog(14000);
+    // Start the analyser WebM tap immediately in parallel with primary playback so the spectrum wakes up fast.
+    this.ensureAnalyserGraph();
+    this.syncAnalyserTap(true);
     // Call play during the user's interaction, without waiting for extraction.
     this.play();
+
+    // If the user has active EQ settings, prepare the GStreamer-equalized stream in the background.
+    if (isMixerEqActive(this.mixerState)) {
+      this.scheduleEqHotSwap(180);
+    }
   }
 
   private async reportMediaError(audio: HTMLAudioElement, videoId: string, playError?: DOMException) {
@@ -307,11 +613,29 @@ export class YouTubeAudioEngine {
       this.loadAndPlay(videoId);
       return;
     }
-    void audio.play().catch((error: DOMException) => {
+    // Pre-warm and resume the analyser tap in the same user gesture.
+    this.ensureAnalyserGraph();
+    this.syncAnalyserTap(true);
+
+    if (!audio.paused && !audio.ended && audio.readyState >= 3) {
+      this.clearWatchdog();
+      this.emitState(audio, 1);
+      return;
+    }
+
+    void audio.play().then(() => {
+      if (this.audio === audio && this.playbackRequested && !audio.paused && !audio.ended && audio.readyState >= 3) {
+        this.clearWatchdog();
+        this.emitState(audio, 1);
+        this.syncAnalyserTap(true);
+      }
+    }).catch((error: DOMException) => {
       if (this.audio !== audio || error.name === 'AbortError') return;
       if (error.name === 'NotAllowedError') {
-        this.onStateChangeCallback?.(2);
+        this.emitState(audio, 2);
         this.onErrorCallback?.(0, videoId, 'Playback was blocked by the browser. Click PLAY to start the audio.');
+      } else if (audio.currentTime > 0.5 && this.recoverMidStream(audio, videoId)) {
+        return;
       } else {
         void this.reportMediaError(audio, videoId, error);
       }
@@ -321,6 +645,7 @@ export class YouTubeAudioEngine {
   public pause() {
     this.playbackRequested = false;
     this.clearWatchdog();
+    this.clearSwap();
     this.isChangingFormat = false;
     this.onFormatChangeCallback?.(this.currentFormat, false);
     this.audio?.pause();
@@ -333,24 +658,25 @@ export class YouTubeAudioEngine {
     const targetTime = Math.max(0, duration > 0 ? Math.min(seconds, duration) : seconds);
     this.audio.currentTime = targetTime;
     if (this.analyserAudio && this.analyserAudio.readyState > 0) {
-      this.analyserAudio.currentTime = targetTime;
+      this.lastAnalyserSeekAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      try { this.analyserAudio.currentTime = targetTime; } catch {}
     }
   }
 
   public setVolume(volume: number) {
     if (!Number.isFinite(volume)) return;
     this.currentVolume = Math.max(0, Math.min(100, volume));
-    if (this.audio) this.audio.volume = this.currentVolume / 100;
+    this.syncVolumeToAudio();
   }
 
   public mute() {
     this.muted = true;
-    if (this.audio) this.audio.muted = true;
+    this.syncVolumeToAudio();
   }
 
   public unMute() {
     this.muted = false;
-    if (this.audio) this.audio.muted = false;
+    this.syncVolumeToAudio();
   }
 
   public getCurrentTime(): number {
@@ -408,59 +734,151 @@ export class YouTubeAudioEngine {
     }
   }
 
-  public getAnalyser(): AnalyserNode | null {
-    if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
+  private ensureAnalyserGraph(): boolean {
+    if (typeof window === 'undefined' || typeof Audio === 'undefined') return false;
     try {
       if (!this.audioContext) {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioCtx) return null;
-        this.audioContext = new AudioCtx();
-        this.analyser = this.audioContext.createAnalyser();
-        this.analyser.fftSize = 2048;
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtx) return false;
+        const ctx = new AudioCtx();
+        this.audioContext = ctx;
+
+        const createFilter = (type: BiquadFilterType, frequency: number, q = 0.707): BiquadFilterNode => {
+          const filter = ctx.createBiquadFilter();
+          filter.type = type;
+          filter.frequency.value = frequency;
+          filter.Q.value = q;
+          filter.gain.value = 0;
+          return filter;
+        };
+
+        this.analyserPreamp = ctx.createGain();
+        this.analyserSubBass = createFilter('lowshelf', 55, 0.707);
+        this.analyserBass = createFilter('lowshelf', 115, 0.707);
+        this.analyserMid = createFilter('peaking', 1000, 0.85);
+        this.analyserPresence = createFilter('peaking', 2800, 1.15);
+        this.analyserTreble = createFilter('highshelf', 7500, 0.707);
+        this.analyserAir = createFilter('highshelf', 13500, 0.707);
+        this.analyserEqFilters = MIXER_ISO_BANDS.map(band => createFilter(band.type, band.freq, band.q));
+
+        this.analyser = ctx.createAnalyser();
+        this.analyser.fftSize = 4096;
         this.analyser.minDecibels = -85;
         this.analyser.maxDecibels = -10;
-        this.analyser.smoothingTimeConstant = 0.4;
-        this.analyserGain = this.audioContext.createGain();
+        this.analyser.smoothingTimeConstant = 0.35;
+
+        this.analyserLeft = ctx.createAnalyser();
+        this.analyserLeft.fftSize = 512;
+        this.analyserRight = ctx.createAnalyser();
+        this.analyserRight.fftSize = 512;
+        this.analyserSplitter = ctx.createChannelSplitter(2);
+
+        this.analyserGain = ctx.createGain();
         this.analyserGain.gain.value = 0;
-        this.analyser.connect(this.analyserGain);
-        this.analyserGain.connect(this.audioContext.destination);
+
+        const chain: AudioNode[] = [
+          this.analyserPreamp,
+          this.analyserSubBass,
+          this.analyserBass,
+          this.analyserMid,
+          this.analyserPresence,
+          this.analyserTreble,
+          this.analyserAir,
+          ...this.analyserEqFilters,
+          this.analyser,
+          this.analyserGain,
+          ctx.destination,
+        ];
+        for (let i = 0; i < chain.length - 1; i++) {
+          chain[i].connect(chain[i + 1]);
+        }
+
+        // Parallel stereo split tap so L/R VU meters read true Left and Right channels.
+        const lastEq = this.analyserEqFilters[this.analyserEqFilters.length - 1] ?? this.analyserAir;
+        lastEq.connect(this.analyserSplitter);
+        this.analyserSplitter.connect(this.analyserLeft, 0);
+        this.analyserSplitter.connect(this.analyserRight, 1);
+        this.analyserLeft.connect(this.analyserGain);
+        this.analyserRight.connect(this.analyserGain);
+
+        this.updateAnalyserFilters();
       }
 
-      if (!this.analyserAudio && this.audioContext && this.analyser) {
+      if (!this.analyserAudio && this.audioContext && this.analyserPreamp) {
         const tap = new Audio();
         tap.crossOrigin = 'anonymous';
         tap.preload = 'auto';
+        const resumeTap = () => {
+          if (this.analyserAudio !== tap || !this.audio || !this.playbackRequested) return;
+          if (!this.audio.paused && !this.audio.ended && tap.paused && !tap.error) {
+            void tap.play().catch(() => {});
+          }
+        };
+        tap.addEventListener('loadedmetadata', () => {
+          if (this.analyserAudio === tap && this.audio && this.audio.currentTime > 1.2 && Math.abs(tap.currentTime - this.audio.currentTime) > 0.75) {
+            this.lastAnalyserSeekAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+            try { tap.currentTime = this.audio.currentTime; } catch {}
+          }
+        });
+        tap.addEventListener('canplay', resumeTap);
         const source = this.audioContext.createMediaElementSource(tap);
-        source.connect(this.analyser);
+        source.connect(this.analyserPreamp);
         this.analyserAudio = tap;
       }
 
-      if (this.analyserAudio && this.audio) {
-        const mainSrc = this.audio.src;
-        if (mainSrc && this.analyserAudio.src !== mainSrc) {
-          this.analyserAudio.src = mainSrc;
-          this.analyserAudio.currentTime = this.audio.currentTime || 0;
-        }
-        const isMainPlaying = !this.audio.paused && !this.audio.ended && !!mainSrc;
-        if (isMainPlaying) {
-          if (this.audioContext && this.audioContext.state === 'suspended') {
-            void this.audioContext.resume();
-          }
-          if (this.analyserAudio.readyState >= 1 && Math.abs(this.analyserAudio.currentTime - this.audio.currentTime) > 0.35) {
-            this.analyserAudio.currentTime = this.audio.currentTime;
-          }
-          if (this.analyserAudio.paused) {
-            void this.analyserAudio.play().catch(() => {});
-          }
-        } else if (!this.analyserAudio.paused) {
-          this.analyserAudio.pause();
-        }
-      }
-
-      return this.analyser;
+      return true;
     } catch {
-      return null;
+      return false;
     }
+  }
+
+  private syncAnalyserTap(forcePlay = false): void {
+    if (!this.analyserAudio || !this.audio || !this.currentVideoId) return;
+    // Use WebM/Opus for the analyser tap because GStreamer's opusdec outputs interleaved PCM
+    // which links directly with WebKitGTK's AudioSourceProviderGStreamer deinterleave element.
+    const tapSrc = new URL(`/api/audio/${encodeURIComponent(this.currentVideoId)}/stream?format=webm`, window.location.origin).toString();
+    if (this.analyserTapSrc !== tapSrc) {
+      this.analyserTapSrc = tapSrc;
+      this.analyserAudio.src = tapSrc;
+      this.analyserAudio.load();
+    }
+
+    const shouldPlay = this.playbackRequested && !this.audio.ended && !!this.audio.src && (forcePlay || !this.audio.paused);
+    if (shouldPlay) {
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        void this.audioContext.resume();
+      }
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      // Never seek-thrash on every animation frame while the tap is still seeking or starting from 0s.
+      if (
+        !this.analyserAudio.seeking &&
+        this.analyserAudio.readyState >= 2 &&
+        this.audio.currentTime >= 1.2 &&
+        now - this.lastAnalyserSeekAt >= 1500 &&
+        Math.abs(this.analyserAudio.currentTime - this.audio.currentTime) > 0.75
+      ) {
+        this.lastAnalyserSeekAt = now;
+        try { this.analyserAudio.currentTime = this.audio.currentTime; } catch {}
+      }
+      if (this.analyserAudio.paused && !this.analyserAudio.error && (forcePlay || now - this.lastAnalyserPlayAt >= 300)) {
+        this.lastAnalyserPlayAt = now;
+        void this.analyserAudio.play().catch(() => {});
+      }
+    } else if (!this.analyserAudio.paused) {
+      this.analyserAudio.pause();
+    }
+  }
+
+  public getAnalyser(): AnalyserNode | null {
+    if (!this.ensureAnalyserGraph()) return null;
+    this.syncAnalyserTap(false);
+    return this.analyser;
+  }
+
+  public getStereoAnalysers(): { left: AnalyserNode; right: AnalyserNode } | null {
+    if (!this.ensureAnalyserGraph()) return null;
+    if (!this.analyserLeft || !this.analyserRight) return null;
+    return { left: this.analyserLeft, right: this.analyserRight };
   }
 }
 

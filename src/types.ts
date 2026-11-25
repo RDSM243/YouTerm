@@ -134,12 +134,45 @@ export interface SkinConfig {
   layout: DockLayout | null;
 }
 
-export type DockPanelId = 'sidebar' | 'tracks' | 'artwork' | 'lyrics' | 'spectrum' | 'player';
+export type DockPanelId = 'sidebar' | 'playlists' | 'tracks' | 'artwork' | 'lyrics' | 'spectrum' | 'mixer' | 'player';
 export type DockPosition = 'left' | 'right' | 'top' | 'bottom' | 'center';
 export type DockNode = { type: 'panel'; panel: DockPanelId } | {
   type: 'split'; id: string; axis: 'row' | 'column'; ratio: number; first: DockNode; second: DockNode;
 };
 export interface DockLayout { version: 1; root: DockNode; }
+
+export type AudioMixerPresetId =
+  | 'flat'
+  | 'bass_boost'
+  | 'treble_clarity'
+  | 'mid_vocal'
+  | 'v_shape'
+  | 'rock'
+  | 'electronic'
+  | 'hip_hop'
+  | 'acoustic'
+  | 'late_night'
+  | 'custom';
+
+export type AudioMixerViewMode = 'all' | 'tone' | 'bands';
+
+export interface AudioMixerState {
+  enabled: boolean;
+  preset: AudioMixerPresetId;
+  viewMode: AudioMixerViewMode;
+  bass: number;      // -15 to +15 dB (100 Hz Low Shelf - Graves)
+  mid: number;       // -15 to +15 dB (1 kHz Peak - Médios)
+  treble: number;    // -15 to +15 dB (8 kHz High Shelf - Agudos)
+  subBass: number;   // -12 to +12 dB (55 Hz Deep Sub-Bass)
+  presence: number;  // -12 to +12 dB (2.8 kHz Vocal Presence)
+  air: number;       // -12 to +12 dB (13.5 kHz High Air / Brilliance)
+  preamp: number;    // -12 to +12 dB
+  balance: number;   // -100 (Left) to +100 (Right)
+  compressor: boolean;
+  antiClip: boolean;
+  mono: boolean;
+  bands: number[];   // 10 ISO bands: 32, 64, 125, 250, 500, 1k, 2k, 4k, 8k, 16k (-12 to +12 dB)
+}
 
 export interface SkinSnapshot {
   appearance: AppearanceConfig;

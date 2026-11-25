@@ -5,12 +5,24 @@ import { createDockLayout, addDockPanel, dockDropPosition, dockPanels, moveDockP
 import { DEFAULT_SKIN } from '../src/services/skin';
 import { THEMES } from '../src/data/themes';
 import { exportThemeJson, importThemeBundleJson, normalizeAppearance, validateCustomTheme } from '../src/services/themeStorage';
+import {
+  applyMixerPreset,
+  computeEffectivePreampDb,
+  DEFAULT_AUDIO_MIXER_STATE,
+  normalizeAudioMixerState,
+  resetAudioMixerState,
+  sampleMixerResponseDb,
+} from '../src/services/audioMixerStorage';
 
 test('starting the editor reflects the current view and the chosen sidebar and playback positions', () => {
   const cover = createDockLayout('ascii_cover', { sidebar: 'hidden', playerPosition: 'top' });
   assert.deepEqual(dockPanels(cover.root), ['player', 'artwork']);
   const tracks = createDockLayout('tracklist', { sidebar: 'right', playerPosition: 'bottom' });
-  assert.deepEqual(dockPanels(tracks.root), ['tracks', 'sidebar', 'player']);
+  assert.deepEqual(dockPanels(tracks.root), ['tracks', 'sidebar', 'playlists', 'player']);
+  const libraryOnly = createDockLayout('tracklist', { sidebar: 'left', playerPosition: 'bottom' }, true, { library: true, playlists: false });
+  assert.deepEqual(dockPanels(libraryOnly.root), ['sidebar', 'tracks', 'player']);
+  const playlistsOnly = createDockLayout('tracklist', { sidebar: 'left', playerPosition: 'bottom' }, true, { library: false, playlists: true });
+  assert.deepEqual(dockPanels(playlistsOnly.root), ['playlists', 'tracks', 'player']);
   assert.deepEqual(dockPanels(createDockLayout('split', DEFAULT_SKIN, false).root), ['tracks', 'artwork', 'lyrics', 'player']);
 });
 
@@ -46,12 +58,13 @@ test('moving between siblings collapses the old split and places the source at t
 
 test('hiding panels leaves at least one usable panel and adding them back keeps each one unique', () => {
   let layout = createDockLayout('split', DEFAULT_SKIN);
-  for (const id of ['sidebar', 'artwork', 'lyrics', 'player'] as DockPanelId[]) layout = removeDockPanel(layout, id);
+  for (const id of ['sidebar', 'playlists', 'artwork', 'lyrics', 'player'] as DockPanelId[]) layout = removeDockPanel(layout, id);
   assert.deepEqual(layout.root, { type: 'panel', panel: 'tracks' });
   assert.equal(removeDockPanel(layout, 'tracks'), layout);
-  layout = addDockPanel(addDockPanel(layout, 'player'), 'sidebar');
+  layout = addDockPanel(addDockPanel(addDockPanel(layout, 'player'), 'sidebar'), 'playlists');
   assert.equal(addDockPanel(layout, 'sidebar'), layout);
-  assert.deepEqual([...dockPanels(layout.root)].sort(), ['player', 'sidebar', 'tracks']);
+  assert.equal(addDockPanel(layout, 'playlists'), layout);
+  assert.deepEqual([...dockPanels(layout.root)].sort(), ['player', 'playlists', 'sidebar', 'tracks']);
   assert.equal(moveDockPanel(layout, 'tracks', 'lyrics', 'top'), layout);
 });
 
@@ -90,4 +103,53 @@ test('pointer destinations distinguish the four docking edges from a center swap
   for (const [x, y, position] of [[110, 350, 'left'], [490, 350, 'right'], [300, 210, 'top'], [300, 490, 'bottom'], [300, 350, 'center']] as const) {
     assert.equal(dockDropPosition(x, y, rect), position);
   }
+});
+
+test('mixer widget stays optional by default and can be docked, moved, persisted and removed', () => {
+  for (const mode of ['tracklist', 'ascii_cover', 'split', 'visualizer'] as const) {
+    const defaultLayout = createDockLayout(mode, DEFAULT_SKIN);
+    assert.equal(dockPanels(defaultLayout.root).includes('mixer'), false);
+  }
+  const withMixer = addDockPanel(createDockLayout('split', DEFAULT_SKIN), 'mixer');
+  assert.equal(dockPanels(withMixer.root).includes('mixer'), true);
+  const moved = moveDockPanel(withMixer, 'mixer', 'tracks', 'bottom');
+  assert.deepEqual(normalizeDockLayout(moved), moved);
+  assert.equal(dockPanels(removeDockPanel(moved, 'mixer').root).includes('mixer'), false);
+});
+
+test('audio mixer presets, tone controls, 10-band EQ and anti-clip protection normalize safely', () => {
+  const corrupted = normalizeAudioMixerState({
+    enabled: 'yes',
+    preset: 'invalid_preset',
+    viewMode: 'unknown',
+    bass: 999,
+    mid: -999,
+    treble: 4.24,
+    balance: -250,
+    bands: [50, -50, 'bad', 3.5],
+  });
+  assert.equal(corrupted.enabled, true);
+  assert.equal(corrupted.preset, 'flat');
+  assert.equal(corrupted.viewMode, 'all');
+  assert.equal(corrupted.bass, 15);
+  assert.equal(corrupted.mid, -15);
+  assert.equal(corrupted.treble, 4);
+  assert.equal(corrupted.balance, -100);
+  assert.equal(corrupted.bands.length, 10);
+  assert.deepEqual(corrupted.bands.slice(0, 4), [12, -12, 0, 3.5]);
+
+  const bassBoost = applyMixerPreset(DEFAULT_AUDIO_MIXER_STATE, 'bass_boost');
+  assert.equal(bassBoost.preset, 'bass_boost');
+  assert.ok(bassBoost.bass > 0);
+  assert.ok(sampleMixerResponseDb(bassBoost, 64) > sampleMixerResponseDb(bassBoost, 1000));
+  const { effectivePreampDb, autoTrimDb } = computeEffectivePreampDb(bassBoost);
+  assert.ok(autoTrimDb < 0);
+  assert.ok(effectivePreampDb < bassBoost.preamp);
+
+  const reset = resetAudioMixerState(bassBoost);
+  assert.equal(reset.preset, 'flat');
+  assert.equal(reset.bass, 0);
+  assert.equal(reset.mid, 0);
+  assert.equal(reset.treble, 0);
+  assert.equal(sampleMixerResponseDb(reset, 1000), 0);
 });

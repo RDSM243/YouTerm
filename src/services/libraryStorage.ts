@@ -22,7 +22,7 @@ export interface PlayerPreferences {
   audioFormat: 'm4a' | 'webm';
   viewMode: TuiViewMode;
   activeCategory: LibraryCategory;
-  spectrumMode: 'bars' | 'wave' | 'matrix';
+  spectrumMode: 'bars';
   spectrumSensitivity: number;
 }
 
@@ -35,7 +35,7 @@ export const defaultPlayerPreferences: PlayerPreferences = {
   viewMode: 'tracklist',
   activeCategory: 'explore',
   spectrumMode: 'bars',
-  spectrumSensitivity: 1.0,
+  spectrumSensitivity: 0,
 };
 
 export const defaultAsciiConfig: AsciiConfig = {
@@ -203,11 +203,9 @@ export function loadPlayerPreferences(): PlayerPreferences {
           activeCategory: ['explore', 'made_for_you', 'recently_played', 'liked_songs', 'albums', 'artists', 'podcasts'].includes(parsed.activeCategory)
             ? parsed.activeCategory
             : defaultPlayerPreferences.activeCategory,
-          spectrumMode: ['bars', 'wave', 'matrix'].includes(parsed.spectrumMode)
-            ? parsed.spectrumMode
-            : defaultPlayerPreferences.spectrumMode,
+          spectrumMode: 'bars',
           spectrumSensitivity: typeof parsed.spectrumSensitivity === 'number' && Number.isFinite(parsed.spectrumSensitivity)
-            ? (parsed.spectrumSensitivity === 0 ? 0 : Math.max(0.4, Math.min(4.0, parsed.spectrumSensitivity)))
+            ? (parsed.spectrumSensitivity === 0 ? 0 : Math.max(0.4, Math.min(3.0, parsed.spectrumSensitivity)))
             : defaultPlayerPreferences.spectrumSensitivity,
         };
       }

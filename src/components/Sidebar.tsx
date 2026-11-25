@@ -5,6 +5,7 @@ import { Sparkles, History, Heart, Disc, User, Radio, Plus, ListMusic, Compass, 
 
 interface SidebarProps {
   theme: ThemeConfig;
+  section?: 'library' | 'playlists' | 'both';
   showBackground?: boolean;
   preferences: SidebarPreferences;
   onChangePreferences: (change: Partial<SidebarPreferences>) => void;
@@ -51,6 +52,7 @@ const SectionHeader = ({ theme, label, expanded, controls, focused, onToggle }: 
 
 export const Sidebar: React.FC<SidebarProps> = ({
   theme,
+  section = 'both',
   showBackground = false,
   preferences,
   onChangePreferences,
@@ -70,14 +72,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isLoggedIn,
 }) => {
   const libraryItems = LIBRARY_ITEMS.filter(item => preferences.libraryItems[item.id]);
-  const showLibrary = preferences.showLibrary && libraryItems.length > 0;
-  if (!showLibrary && !preferences.showPlaylists) return null;
+  const showLibrary = section !== 'playlists' && preferences.showLibrary && libraryItems.length > 0;
+  const showPlaylists = section !== 'library' && preferences.showPlaylists;
+  if (!showLibrary && !showPlaylists) return null;
 
-  const isDual = showLibrary && preferences.showPlaylists;
+  const isDual = showLibrary && showPlaylists;
+  const regionLabel = section === 'library' ? 'Library' : section === 'playlists' ? 'Playlists' : 'Library and playlists';
 
   return (
     <aside
-      aria-label="Library and playlists"
+      aria-label={regionLabel}
       data-background-region="sidebar" data-background-enabled={showBackground}
       className="sidebar-root skin-panel w-full min-h-0 min-w-0 flex-1 flex flex-col select-none overflow-hidden text-xs"
       style={{
@@ -90,13 +94,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Box: Library */}
       {showLibrary && <section
         data-expanded={preferences.libraryExpanded}
-        className={`sidebar-library-section flex min-h-0 min-w-0 flex-col border-b ${preferences.libraryExpanded ? preferences.showPlaylists && preferences.playlistsExpanded ? 'max-h-[60%]' : 'flex-1' : 'shrink-0'}`}
+        className={`sidebar-library-section flex min-h-0 min-w-0 flex-col ${showPlaylists ? 'border-b' : ''} ${preferences.libraryExpanded ? showPlaylists && preferences.playlistsExpanded ? 'max-h-[60%]' : 'flex-1' : 'shrink-0'}`}
         style={{ borderColor: theme.border }}>
         <SectionHeader theme={theme} label="Library" expanded={preferences.libraryExpanded}
           controls="sidebar-library-items" focused={isFocused}
           onToggle={() => onChangePreferences({ libraryExpanded: !preferences.libraryExpanded })} />
         <div id="sidebar-library-items" hidden={!preferences.libraryExpanded}
-          className={preferences.libraryExpanded ? 'sidebar-section-list min-h-0 overflow-y-auto py-1 custom-scrollbar' : 'hidden'}>
+          className={preferences.libraryExpanded ? 'sidebar-section-list flex-1 min-h-0 overflow-y-auto py-1 custom-scrollbar' : 'hidden'}>
           {libraryItems.map((item) => {
             const isSelected = activeCategory === item.id && !selectedPlaylistId;
             const isPlayingThis = playingCategory === item.id && !playingPlaylistId;
@@ -143,7 +147,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </section>}
 
       {/* Box: Playlists */}
-      {preferences.showPlaylists && <section className={`sidebar-playlists-section flex min-h-0 min-w-0 flex-col ${preferences.playlistsExpanded ? 'flex-1' : 'shrink-0'}`}>
+      {showPlaylists && <section className={`sidebar-playlists-section flex min-h-0 min-w-0 flex-col ${preferences.playlistsExpanded ? 'flex-1' : 'shrink-0'}`}>
         <SectionHeader theme={theme} label="Playlists" expanded={preferences.playlistsExpanded}
           controls="sidebar-playlist-items" focused={isFocused && !showLibrary}
           onToggle={() => onChangePreferences({ playlistsExpanded: !preferences.playlistsExpanded })} />

@@ -59,6 +59,7 @@ pub struct PrefetchedChunk {
 #[derive(Clone)]
 pub struct InnerTubeClient {
     http: reqwest::Client,
+    media_http: reqwest::Client,
     visitor_data: Arc<RwLock<Option<String>>>,
     audio_cache: Arc<RwLock<HashMap<String, Result<ResolvedAudio, (AudioStreamError, Instant)>>>>,
     inflight: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
@@ -77,12 +78,26 @@ impl InnerTubeClient {
             .pool_max_idle_per_host(24)
             .pool_idle_timeout(Duration::from_secs(90))
             .tcp_nodelay(true)
-            .timeout(Duration::from_secs(12))
+            .connect_timeout(Duration::from_secs(8))
+            .timeout(Duration::from_secs(15))
+            .build()
+            .unwrap_or_default();
+
+        // Dedicated streaming client: no overall request timeout so long tracks and paused
+        // streams are never killed mid-playback after 12s; uses connect + idle read timeouts.
+        let media_http = reqwest::Client::builder()
+            .pool_max_idle_per_host(16)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .tcp_nodelay(true)
+            .tcp_keepalive(Duration::from_secs(20))
+            .connect_timeout(Duration::from_secs(10))
+            .read_timeout(Duration::from_secs(30))
             .build()
             .unwrap_or_default();
 
         Self {
             http,
+            media_http,
             visitor_data: Arc::new(RwLock::new(None)),
             audio_cache: Arc::new(RwLock::new(HashMap::new())),
             inflight: Arc::new(Mutex::new(HashMap::new())),
@@ -92,6 +107,10 @@ impl InnerTubeClient {
 
     pub fn http(&self) -> &reqwest::Client {
         &self.http
+    }
+
+    pub fn media_http(&self) -> &reqwest::Client {
+        &self.media_http
     }
 
     /// Ensure we have a valid YouTube InnerTube `visitorData` token in memory
@@ -1158,7 +1177,7 @@ impl InnerTubeClient {
 
         let range_header = format!("bytes=0-{}", PREFETCH_BYTES - 1);
         let mut req = self
-            .http
+            .media_http
             .get(&source.url)
             .header("Accept-Encoding", "identity")
             .header("Range", range_header);
